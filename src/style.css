@@ -1,4 +1,142 @@
 @import "tailwindcss";
+
+.workspace-stack {
+  display: grid;
+  gap: 24px;
+}
+.workspace-panel {
+  padding: 24px;
+  min-width: 0;
+}
+.workspace-panel > p {
+  margin: 14px 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.workspace-panel h2,
+.workspace-title {
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+.workspace-title {
+  padding: 22px 22px 0;
+}
+.research-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.research-grid > * {
+  min-width: 0;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.field-grid label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.field-grid input,
+.field-grid select {
+  width: 100%;
+  min-width: 0;
+}
+.risk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin: 24px 0;
+}
+.risk-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+.risk-card > span {
+  text-transform: capitalize;
+  color: var(--muted);
+}
+.risk-card > strong {
+  font-size: 25px;
+}
+.risk-card progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--lime);
+}
+.risk-alto progress {
+  accent-color: #ec8c80;
+}
+.risk-medio progress {
+  accent-color: #e3bb76;
+}
+.indicator-description {
+  min-width: 220px;
+  max-width: 320px;
+  white-space: normal;
+}
+.workspace-panel td input {
+  width: 180px;
+}
+.resource-links {
+  display: grid;
+  gap: 14px;
+}
+.resource-links a {
+  display: flex;
+  justify-content: space-between;
+}
+.portfolio-analysis {
+  white-space: pre-wrap;
+  margin-top: 22px;
+  line-height: 1.8;
+}
+.workspace-panel details {
+  margin: 18px 0;
+  line-height: 1.8;
+}
+.workspace-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.workspace-panel ul {
+  padding-left: 22px;
+  list-style: disc;
+}
+.research-link {
+  margin: 0 22px 16px;
+}
+.widget-financials {
+  height: 590px;
+}
+.widget-technical {
+  height: 490px;
+}
+.widget-financials .tradingview-widget-container,
+.widget-technical .tradingview-widget-container {
+  height: calc(100% - 30px);
+}
+.sidebar {
+  overflow-y: auto;
+}
+@media (max-width: 800px) {
+  .research-grid {
+    grid-template-columns: 1fr;
+  }
+  .workspace-panel {
+    padding: 18px;
+  }
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+}
 @theme {
   --font-sans: "Segoe UI", Arial, sans-serif;
 }
@@ -1986,4 +2124,47 @@ dialog::backdrop {
     font-size: 11px;
     padding: 7px;
   }
+}
+
+.nav-group-title {
+  display: block;
+  padding: 18px 12px 7px;
+  font-size: 9px;
+  letter-spacing: 1.3px;
+  color: var(--muted);
+}
+.inflation-history {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 24px 0;
+}
+.inflation-bars {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+.inflation-bars > div {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 80px;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+}
+.inflation-track {
+  height: 12px;
+  background: var(--line);
+  border-radius: 4px;
+}
+.inflation-track > span {
+  display: block;
+  height: 100%;
+  background: var(--lime);
+  border-radius: 4px;
+}
+.widget-shell.widget-financials {
+  height: 590px;
+}
+.widget-shell.widget-technical {
+  height: 490px;
 }

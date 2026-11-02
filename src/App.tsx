@@ -1,3 +1,6 @@
+import { Research, RiskPanel, MacroPanel, Resources } from "./Workspace";
+import { currencies, positionValue } from "./portfolio";
+import { countries, matchesCountry, searchText, newsSymbol } from "./catalog";
 import {
   loadPreferences,
   preferencesKey,
@@ -55,12 +58,23 @@ import type {
 } from "./types";
 
 type Page =
-  "inicio" | "mercados" | "noticias" | "cartera" | "calendario" | "ajustes";
+  | "inicio"
+  | "mercados"
+  | "noticias"
+  | "cartera"
+  | "calendario"
+  | "ajustes"
+  | "analisis"
+  | "riesgo"
+  | "recursos";
 const navigation = [
   { id: "inicio", label: "Mi panorama", icon: LayoutDashboard },
   { id: "mercados", label: "Explorar mercados", icon: Globe2 },
   { id: "noticias", label: "Noticias e IA", icon: BookOpen },
   { id: "cartera", label: "Mi cartera", icon: Wallet },
+  { id: "analisis", label: "Análisis financiero", icon: ChartNoAxesCombined },
+  { id: "riesgo", label: "Riesgo y perfil", icon: ShieldCheck },
+  { id: "recursos", label: "Herramientas y divisas", icon: ExternalLink },
   { id: "calendario", label: "Calendario", icon: CalendarDays },
 ] as const;
 const format = (n: number | null | undefined, currency = "USD") =>
@@ -68,7 +82,7 @@ const format = (n: number | null | undefined, currency = "USD") =>
     ? "—"
     : new Intl.NumberFormat("es-AR", {
         style: "currency",
-        currency: currency === "XXX" ? "USD" : currency,
+        currency,
         maximumFractionDigits: 2,
       }).format(n);
 const pct = (n: number | null | undefined) =>
@@ -89,6 +103,9 @@ const countryName = (c: string) =>
       br: "Brasil",
       cn: "China",
       in: "India",
+      au: "Australia",
+      es: "España",
+      it: "Italia",
     }) as Record<string, string>
   )[c] || c.toUpperCase();
 const time = (date: string) => {
@@ -369,6 +386,8 @@ export default function App() {
     [searchError, setSearchError] = useState(""),
     [searchPage, setSearchPage] = useState(1),
     [hasMore, setHasMore] = useState(false);
+  const [exchange, setExchange] = useState("todos");
+  const [riskFilter, setRiskFilter] = useState("todos");
   const [kind, setKind] = useState("todos"),
     [country, setCountry] = useState("todos"),
     [sector, setSector] = useState("todos"),
@@ -413,7 +432,7 @@ export default function App() {
     ]).then(([m, a]) => {
       if (canceled) return;
       if (m.status === "fulfilled") {
-        setMarket(m.value);
+        setMarket((previous) => ({ ...m.value, global: previous?.global }));
         setMarketError("");
       } else setMarketError(m.reason.message);
       if (a.status === "fulfilled") setAssets(a.value.data);
@@ -434,7 +453,7 @@ export default function App() {
     setSearchBusy(true);
     const timer = setTimeout(() => {
       api<{ data: Asset[]; hasMore: boolean }>(
-        `search?q=${encodeURIComponent(query.trim())}&page=${searchPage}${country === "todos" ? "" : "&country=" + country}`,
+        `search?q=${encodeURIComponent(searchText(query).split(":").at(-1) || "")}&page=${searchPage}${country === "todos" || country === "asia" ? "" : "&country=" + country}`,
       )
         .then((r) => {
           if (!canceled) {
@@ -475,7 +494,7 @@ export default function App() {
                 ? [newsAsset]
                 : [...data.watchlist, ...data.positions.map((p) => p.asset)]
           )
-            .map((a) => a.underlying)
+            .map(newsSymbol)
             .filter(Boolean),
         ),
       ]
@@ -551,6 +570,61 @@ export default function App() {
     newsCountry,
     reload,
   ]);
+  const quoteIds = [
+    ...new Set(
+      [selected, ...data.positions.map((p) => p.asset)]
+        .filter((a) => a.country !== "ar")
+        .map((a) => a.id),
+    ),
+  ]
+    .sort()
+    .join(",");
+  const [quoteWarnings, setQuoteWarnings] = useState<string[]>([]);
+  useEffect(() => {
+    let canceled = false;
+    if (!market?.fetchedAt) return;
+    setQuoteWarnings([]);
+    const ids = quoteIds.split(",").filter(Boolean);
+    (async () => {
+      for (let i = 0; i < ids.length; i += 20) {
+        try {
+          const result = await api<{
+            data: {
+              id: string;
+              quote: NonNullable<Market["global"]>[string];
+            }[];
+            warnings?: string[];
+          }>(
+            "quotes?ids=" + encodeURIComponent(ids.slice(i, i + 20).join(",")),
+          );
+          if (canceled) return;
+          setMarket((m) =>
+            m
+              ? {
+                  ...m,
+                  global: {
+                    ...m.global,
+                    ...Object.fromEntries(
+                      result.data.map((r) => [r.id, r.quote]),
+                    ),
+                  },
+                }
+              : m,
+          );
+          setQuoteWarnings((w) => [...w, ...(result.warnings || [])]);
+        } catch {
+          if (!canceled)
+            setQuoteWarnings((w) => [
+              ...w,
+              "No se pudo actualizar una tanda de precios internacionales. Reintentá desde Noticias → Actualizar.",
+            ]);
+        }
+      }
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, [quoteIds, reload, market?.fetchedAt]);
   const balance = totals(data.positions, market, data.currency),
     selectedQuote = quoteFor(selected, market);
   const visibleWatchlist = data.watchlist.filter(
@@ -563,14 +637,15 @@ export default function App() {
       ].filter(
         (a) =>
           (!query ||
-            `${a.name} ${a.symbol} ${a.exchange}`
+            `${a.name} ${a.symbol} ${a.exchange} ${a.id}`
               .toLowerCase()
-              .includes(query.toLowerCase())) &&
+              .includes(searchText(query))) &&
           (kind === "todos" || a.kind === kind) &&
-          (country === "todos" || a.country === country) &&
+          matchesCountry(a.country, country) &&
+          (exchange === "todos" || a.exchange === exchange) &&
           (sector === "todos" || a.sector === sector),
       ),
-    [assets, remote, query, kind, country, sector],
+    [assets, remote, query, kind, country, sector, exchange],
   );
   const newArticles =
     news?.data.filter(
@@ -592,7 +667,7 @@ export default function App() {
   function choose(a: Asset) {
     setSelected(a);
     setSearchOpen(false);
-    go("inicio");
+    go(page === "analisis" ? "analisis" : "inicio");
   }
   function exportData() {
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -624,7 +699,7 @@ export default function App() {
       ...followed,
       ...assets,
     ].find((asset) =>
-      article.entities.some((e) => e.symbol === asset.underlying),
+      article.entities.some((e) => e.symbol === newsSymbol(asset)),
     );
     if (known) return known;
     const symbol = article.entities[0]?.symbol;
@@ -721,6 +796,14 @@ export default function App() {
           <option value="">Todo el mundo</option>
           <option value="ar">Argentina</option>
           <option value="us">EE. UU.</option>
+          <option value="asia">Asia (China, Hong Kong, Japón, India)</option>
+          {countries
+            .filter((c) => !["ar", "us"].includes(c))
+            .map((c) => (
+              <option key={c} value={c}>
+                {countryName(c)}
+              </option>
+            ))}
         </select>
         <span className="muted">
           Marketaux · hasta 3 noticias por empresa y página · caché de 30 min
@@ -750,7 +833,7 @@ export default function App() {
             <NewsCard
               key={a.uuid}
               article={a}
-              symbol={assetForNews(a)?.underlying || ""}
+              symbol={assetForNews(a) ? newsSymbol(assetForNews(a)!) : ""}
               onNotice={setNotice}
               onMore={() => {
                 const asset = assetForNews(a);
@@ -851,7 +934,11 @@ export default function App() {
                       <strong>
                         {a.symbol}
                         <span className="kind-label">
-                          {a.kind === "cedear" ? "CEDEAR" : "ACCIÓN"}
+                          {a.kind === "cedear"
+                            ? "CEDEAR"
+                            : a.kind === "etf"
+                              ? "ETF"
+                              : "ACCIÓN"}
                         </span>
                       </strong>
                       <small>{a.name}</small>
@@ -942,18 +1029,32 @@ export default function App() {
           TU ESPACIO PERSONAL<span>01</span>
         </div>
         <nav aria-label="Navegación principal">
-          {navigation.map((n) => (
-            <button
-              key={n.id}
-              className={page === n.id ? "active" : ""}
-              onClick={() => go(n.id)}
-            >
-              <n.icon size={19} />
-              {n.label}
-              {n.id === "noticias" && newArticles > 0 && (
-                <span className="nav-count">{newArticles}</span>
-              )}
-            </button>
+          {[
+            { title: "SEGUIMIENTO", ids: ["inicio", "mercados", "noticias"] },
+            { title: "MI PORTFOLIO", ids: ["cartera", "analisis", "riesgo"] },
+            {
+              title: "CONTEXTO Y HERRAMIENTAS",
+              ids: ["calendario", "recursos"],
+            },
+          ].map((group) => (
+            <div className="nav-group" key={group.title}>
+              <span className="nav-group-title">{group.title}</span>
+              {navigation
+                .filter((n) => group.ids.includes(n.id))
+                .map((n) => (
+                  <button
+                    key={n.id}
+                    className={page === n.id ? "active" : ""}
+                    onClick={() => go(n.id)}
+                  >
+                    <n.icon size={19} />
+                    {n.label}
+                    {n.id === "noticias" && newArticles > 0 && (
+                      <span className="nav-count">{newArticles}</span>
+                    )}
+                  </button>
+                ))}
+            </div>
           ))}
         </nav>
         <div className="sidebar-lists">
@@ -1088,6 +1189,20 @@ export default function App() {
               {w}
             </div>
           ))}
+          {!!quoteWarnings.length && (
+            <details className="alert">
+              <summary>
+                Algunos precios internacionales no están disponibles
+              </summary>
+              {quoteWarnings.map((w) => (
+                <p key={w}>{w}</p>
+              ))}
+              <p>
+                Se conserva la última cotización recibida de esta sesión, si
+                existe. Podés ingresar un precio manual al editar la posición.
+              </p>
+            </details>
+          )}
           <div className="page-heading">
             <div>
               <div className="eyebrow">
@@ -1103,6 +1218,9 @@ export default function App() {
                     cartera: "Tus inversiones, a tu manera.",
                     calendario: "Anticipate a lo que viene.",
                     ajustes: "Un espacio bien tuyo.",
+                    analisis: "Entendé lo que estás comprando.",
+                    riesgo: "El equilibrio de tu cartera.",
+                    recursos: "Todas tus herramientas, juntas.",
                   }[page]
                 }
               </h1>
@@ -1119,6 +1237,12 @@ export default function App() {
                       "Registrá tus posiciones y seguí su evolución desde un solo lugar.",
                     calendario:
                       "Eventos económicos y acceso a los próximos balances.",
+                    analisis:
+                      "Fundamentos, señales técnicas y tu lista de evaluación.",
+                    riesgo:
+                      "Distribución por valor, concentración y una lectura con IA.",
+                    recursos:
+                      "Accesos por categoría y tipos de cambio de referencia.",
                     ajustes:
                       "Organizá tus listas y llevá tus datos a donde quieras.",
                   }[page]
@@ -1130,15 +1254,19 @@ export default function App() {
                 className="currency-switch"
                 aria-label="Moneda de referencia"
               >
-                {(["USD", "ARS"] as const).map((c) => (
-                  <button
-                    key={c}
-                    className={data.currency === c ? "active" : ""}
-                    onClick={() => setData((d) => ({ ...d, currency: c }))}
-                  >
-                    {c}
-                  </button>
-                ))}
+                <select
+                  aria-label="Moneda final de la cartera"
+                  value={data.currency}
+                  onChange={(e) =>
+                    setData((d) => ({ ...d, currency: e.target.value }))
+                  }
+                >
+                  {currencies.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
               <button className="primary" onClick={() => setSearchOpen(true)}>
                 <Plus size={17} />
@@ -1150,17 +1278,23 @@ export default function App() {
             <div className="metrics">
               <div className="metric">
                 <div>
-                  <span>Valor de mi cartera</span>
+                  <span>
+                    {balance.missing
+                      ? "Valor parcial de mi cartera"
+                      : "Valor de mi cartera"}
+                  </span>
                   <Wallet size={16} />
                 </div>
                 <strong>
                   {data.positions.length
-                    ? format(balance.value, data.currency)
+                    ? balance.missing === data.positions.length
+                      ? "Sin valoración"
+                      : format(balance.value, data.currency)
                     : "Tu punto de partida"}
                 </strong>
                 <small>
                   {data.positions.length
-                    ? `${balance.missing ? balance.missing + " posiciones sin valorar · " : ""}${data.currency} · estimación con CCL actual`
+                    ? `${balance.missing ? balance.missing + " posiciones sin valorar · " : ""}${data.currency} · tipos de cambio actuales`
                     : "Registrá tu primera compra para empezar"}
                 </small>
               </div>
@@ -1173,13 +1307,17 @@ export default function App() {
                   className={balance.profit >= 0 ? "positive" : "negative"}
                 >
                   {data.positions.length
-                    ? format(balance.profit, data.currency)
+                    ? balance.missing === data.positions.length
+                      ? "—"
+                      : format(balance.profit, data.currency)
                     : "—"}
                   <span>
                     {data.positions.length ? pct(balance.percent) : ""}
                   </span>
                 </strong>
-                <small>Sin comisiones · diferencia en moneda de origen</small>
+                <small>
+                  Sin comisiones · costos y valores al cambio actual
+                </small>
               </div>
               <div className="metric">
                 <div>
@@ -1256,10 +1394,18 @@ export default function App() {
                     </span>
                     <small>
                       {selectedQuote
-                        ? "Referencia Data912 · no es tiempo real"
+                        ? market?.global?.[selected.id]
+                          ? `Yahoo Finance · ${time(market.global[selected.id].asOf)}`
+                          : "Referencia Data912 · no es tiempo real"
                         : "La disponibilidad depende del mercado"}
                     </small>
                   </div>
+                  <button
+                    className="secondary research-link"
+                    onClick={() => go("analisis")}
+                  >
+                    Ver fundamentos y evaluación de {selected.symbol}
+                  </button>
                   <TradingWidget
                     theme={preferences.theme === "claro" ? "light" : "dark"}
                     symbol={selected.tv}
@@ -1410,6 +1556,18 @@ export default function App() {
           {page === "mercados" && (
             <section className="panel">
               <div className="market-filters">
+                <select
+                  aria-label="Bolsa"
+                  value={exchange}
+                  onChange={(e) => setExchange(e.target.value)}
+                >
+                  <option value="todos">Todas las bolsas</option>
+                  {[...new Set([...assets, ...remote].map((a) => a.exchange))]
+                    .sort()
+                    .map((x) => (
+                      <option key={x}>{x}</option>
+                    ))}
+                </select>
                 <div className="search-input">
                   <Search size={19} />
                   <input
@@ -1430,6 +1588,7 @@ export default function App() {
                   <option value="todos">Todos los instrumentos</option>
                   <option value="accion">Acciones internacionales</option>
                   <option value="cedear">CEDEARs</option>
+                  <option value="etf">ETFs</option>
                 </select>
                 <select
                   aria-label="País"
@@ -1440,6 +1599,7 @@ export default function App() {
                   }}
                 >
                   <option value="todos">Todos los países</option>
+                  <option value="asia">Asia</option>
                   {[
                     "us",
                     "ar",
@@ -1513,8 +1673,9 @@ export default function App() {
               <p className="footnote">
                 El catálogo inicial es una selección. Escribí al menos dos
                 caracteres para buscar en los mercados cubiertos por Marketaux.
-                Las cotizaciones tabulares cubren EE. UU. y CEDEARs; para otros
-                mercados, abrí su gráfico.
+                Los instrumentos seleccionados y las posiciones consultan su
+                precio por bolsa. La cobertura puede ser parcial; también podés
+                registrar un precio manual.
               </p>
             </section>
           )}
@@ -1547,6 +1708,17 @@ export default function App() {
             <section className="panel">
               <div className="section-head">
                 <h2>Mis posiciones</h2>
+                <select
+                  aria-label="Filtrar riesgo"
+                  value={riskFilter}
+                  onChange={(e) => setRiskFilter(e.target.value)}
+                >
+                  {["todos", "alto", "medio", "bajo", "sin clasificar"].map(
+                    (r) => (
+                      <option key={r}>{r}</option>
+                    ),
+                  )}
+                </select>
                 <button
                   className="secondary"
                   onClick={() => setSearchOpen(true)}
@@ -1569,68 +1741,79 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.positions.map((p) => {
-                        const q = quoteFor(p.asset, market),
-                          value = q
-                            ? convert(
-                                q.price * p.quantity,
-                                p.asset.currency,
-                                data.currency,
-                                market?.ccl ?? null,
-                              )
-                            : null,
-                          cost = convert(
-                            p.cost * p.quantity,
-                            p.asset.currency,
+                      {data.positions
+                        .filter(
+                          (p) =>
+                            riskFilter === "todos" ||
+                            (p.risk || "sin clasificar") === riskFilter,
+                        )
+                        .map((p) => {
+                          const { value, cost } = positionValue(
+                            p,
+                            market,
                             data.currency,
-                            market?.ccl ?? null,
                           );
-                        return (
-                          <tr key={p.asset.id}>
-                            <td>
-                              <button
-                                className="asset-cell"
-                                onClick={() => choose(p.asset)}
+                          return (
+                            <tr key={p.asset.id}>
+                              <td>
+                                <button
+                                  className="asset-cell"
+                                  onClick={() => choose(p.asset)}
+                                >
+                                  <Badge asset={p.asset} />
+                                  <span>
+                                    <strong>{p.asset.symbol}</strong>
+                                    <small>
+                                      {p.asset.kind === "cedear"
+                                        ? "CEDEAR"
+                                        : p.asset.exchange}{" "}
+                                      · {p.asset.currency}
+                                    </small>
+                                  </span>
+                                </button>
+                              </td>
+                              <td>{p.quantity}</td>
+                              <td>
+                                {format(
+                                  p.cost,
+                                  p.costCurrency || p.asset.currency,
+                                )}
+                              </td>
+                              <td>
+                                {format(value, data.currency)}
+                                <small>
+                                  {p.manualPrice !== undefined
+                                    ? `Manual · ${time(p.manualPriceAt || p.updatedAt)}`
+                                    : market?.global?.[p.asset.id]
+                                      ? `Yahoo · ${time(market.global[p.asset.id].asOf)}`
+                                      : "Referencia Data912"}{" "}
+                                  · Riesgo {p.risk || "sin clasificar"}
+                                </small>
+                              </td>
+                              <td
+                                className={
+                                  value != null &&
+                                  cost != null &&
+                                  value - cost < 0
+                                    ? "negative"
+                                    : "positive"
+                                }
                               >
-                                <Badge asset={p.asset} />
-                                <span>
-                                  <strong>{p.asset.symbol}</strong>
-                                  <small>
-                                    {p.asset.kind === "cedear"
-                                      ? "CEDEAR"
-                                      : p.asset.exchange}{" "}
-                                    · {p.asset.currency}
-                                  </small>
-                                </span>
-                              </button>
-                            </td>
-                            <td>{p.quantity}</td>
-                            <td>{format(p.cost, p.asset.currency)}</td>
-                            <td>{format(value, data.currency)}</td>
-                            <td
-                              className={
-                                value != null &&
-                                cost != null &&
-                                value - cost < 0
-                                  ? "negative"
-                                  : "positive"
-                              }
-                            >
-                              {value != null && cost != null
-                                ? format(value - cost, data.currency)
-                                : "Sin cotización"}
-                            </td>
-                            <td>
-                              <button
-                                className="secondary compact"
-                                onClick={() => setEditing(p.asset)}
-                              >
-                                Editar
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                                {value != null && cost != null
+                                  ? format(value - cost, data.currency)
+                                  : "Sin cotización"}
+                              </td>
+                              <td>
+                                <button
+                                  className="secondary compact"
+                                  onClick={() => setEditing(p.asset)}
+                                >
+                                  Editar
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
@@ -1650,16 +1833,37 @@ export default function App() {
                 />
               )}
               <p className="footnote">
-                El costo y el valor se convierten con el mismo CCL actual: el
-                resultado mide la variación en moneda de origen, no la ganancia
-                histórica por tipo de cambio. No incluye comisiones, dividendos
-                ni ajustes por splits. Las posiciones sin cotización o
-                conversión quedan fuera del total.
+                El costo y el valor se convierten con los tipos de cambio
+                actuales (ARS vía CCL): el resultado mide la variación en moneda
+                de origen, no la ganancia histórica por tipo de cambio. No
+                incluye comisiones, dividendos ni ajustes por splits. Las
+                posiciones sin cotización o conversión quedan fuera del total.
               </p>
             </section>
           )}
+          {page === "analisis" && (
+            <Research
+              key={selected.id}
+              asset={selected}
+              theme={preferences.theme === "claro" ? "light" : "dark"}
+              onSearch={() => setSearchOpen(true)}
+            />
+          )}
+          {page === "riesgo" && (
+            <RiskPanel
+              positions={data.positions}
+              market={market}
+              currency={data.currency}
+            />
+          )}
+          {page === "recursos" && <Resources market={market} />}
           {page === "calendario" && (
             <>
+              <MacroPanel
+                positions={data.positions}
+                market={market}
+                currency={data.currency}
+              />
               <section className="panel">
                 <div className="section-head">
                   <div>
@@ -1850,7 +2054,7 @@ export default function App() {
               <section className="panel settings-panel">
                 <Compass size={27} />
                 <h2>Hecho para crecer con vos</h2>
-                <p>Brújula Bursátil · v0.3.0</p>
+                <p>Brújula Bursátil · v0.4.0</p>
                 <p>
                   Un proyecto personal de German Bartoli, con la colaboración de
                   Codex. Código abierto, datos personales locales.
@@ -1931,6 +2135,7 @@ export default function App() {
                 onChange={(e) => {
                   setQuery(e.target.value);
                   setSearchPage(1);
+                  setExchange("todos");
                   setKind("todos");
                   setCountry("todos");
                   setSector("todos");
@@ -2087,6 +2292,18 @@ function PositionModal({
   onSave: (p: Position) => void;
   onDelete: () => void;
 }) {
+  const [quoteCurrency, setQuoteCurrency] = useState(
+    (position?.asset.currency || asset.currency) === "XXX"
+      ? ""
+      : position?.asset.currency || asset.currency,
+  );
+  const [costCurrency, setCostCurrency] = useState(
+    position?.costCurrency || asset.currency,
+  );
+  const [risk, setRisk] = useState(position?.risk || "");
+  const [manualPrice, setManualPrice] = useState(
+    position?.manualPrice?.toString() || "",
+  );
   const [quantity, setQuantity] = useState(position?.quantity.toString() || ""),
     [cost, setCost] = useState(position?.cost.toString() || ""),
     [error, setError] = useState(""),
@@ -2112,8 +2329,34 @@ function PositionModal({
       setError("El símbolo de origen no es válido.");
       return;
     }
+    if (
+      manualPrice &&
+      (!Number.isFinite(Number(manualPrice)) || Number(manualPrice) <= 0)
+    ) {
+      setError("El precio manual debe ser mayor a cero.");
+      return;
+    }
+    if (
+      !currencies.includes(quoteCurrency) ||
+      !currencies.includes(costCurrency)
+    ) {
+      setError("Confirmá las monedas de cotización y compra.");
+      return;
+    }
     onSave({
-      asset: { ...asset, underlying: underlying.toUpperCase() },
+      costCurrency,
+      risk: risk ? (risk as Position["risk"]) : undefined,
+      manualPrice: manualPrice ? Number(manualPrice) : undefined,
+      manualPriceAt: manualPrice
+        ? position?.manualPrice === Number(manualPrice)
+          ? position.manualPriceAt || position.updatedAt
+          : new Date().toISOString()
+        : undefined,
+      asset: {
+        ...asset,
+        currency: quoteCurrency,
+        underlying: underlying.toUpperCase(),
+      },
       quantity: q,
       cost: c,
       updatedAt: new Date().toISOString(),
@@ -2148,7 +2391,7 @@ function PositionModal({
           />
         </label>
         <label>
-          Precio promedio de compra por título ({asset.currency})
+          Precio promedio de compra por título ({costCurrency})
           <input
             type="number"
             min="0"
@@ -2159,6 +2402,59 @@ function PositionModal({
             placeholder="Ej. 125,50"
           />
         </label>
+        <label>
+          Moneda de cotización
+          <select
+            required
+            value={quoteCurrency}
+            onChange={(e) => setQuoteCurrency(e.target.value)}
+          >
+            <option value="">Confirmá con tu broker</option>
+            {currencies.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Moneda del precio de compra
+          <select
+            required
+            value={costCurrency}
+            onChange={(e) => setCostCurrency(e.target.value)}
+          >
+            <option value="XXX">Elegí la moneda</option>
+            {currencies.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Mi clasificación de riesgo
+          <select value={risk} onChange={(e) => setRisk(e.target.value)}>
+            <option value="">Sin clasificar</option>
+            {["bajo", "medio", "alto"].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Precio actual manual ({quoteCurrency || "confirmar moneda"}) ·
+          opcional
+          <input
+            type="number"
+            step="any"
+            min="0.00000001"
+            value={manualPrice}
+            onChange={(e) => setManualPrice(e.target.value)}
+            placeholder="Vacío: usar precio del mercado"
+          />
+        </label>
+        <small>
+          La cotización pertenece a {asset.exchange}. Confirmá su moneda con el
+          broker; los precios automáticos solo se usan si su moneda coincide.
+          Para otra cotización, elegí esa bolsa. El precio manual reemplaza al
+          automático hasta que lo borres.
+        </small>
         {asset.kind === "cedear" && (
           <label>
             Símbolo de la acción de origen

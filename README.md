@@ -14,7 +14,10 @@ Un panel personal para seguir acciones internacionales y CEDEARs, leer sus notic
 - Gráficos interactivos, perfil de empresa y calendario económico de TradingView; enlace a próximos balances.
 - Noticias directas o contexto sectorial, agrupación de duplicados y novedades desde la última visita.
 - Análisis bajo demanda del título y extracto con Cloudflare Workers AI.
-- Vista en USD/ARS, conversión al dólar CCL y resultados estimados.
+- Cartera multimoneda con moneda de compra independiente, conversión cruzada vía USD y ARS por CCL.
+- Países, bolsas, región asiática y ETFs; identidades distintas por cotización.
+- Fundamentos y técnicos de TradingView, evaluación manual de 21 indicadores, riesgo y perfil con IA.
+- Inflación anual observada, escenarios de tasas e inflación y accesos a herramientas por categoría.
 - Respaldo JSON con exportación, validación e importación confirmada.
 - Publicación automática en Cloudflare Pages después de verificar cada push a `main`.
 
@@ -81,17 +84,17 @@ El catálogo argentino incluye las acciones locales en pesos identificadas en el
 
 El calendario integrado es económico; los balances se consultan mediante enlace a TradingView. No se inventan fechas de balances ni precios. Los CEDEARs se vinculan con las correspondencias de Data912 y una selección inicial verificada. Se incluyen únicamente las especies en pesos identificadas; las variantes D/C en dólares no se confunden con ARS. El símbolo de origen puede corregirse al editar una posición. No se aplican ratios de conversión de títulos.
 
-Las posiciones se valoran con el precio del instrumento y su moneda. Tanto el costo como el valor actual se convierten con el mismo CCL: el resultado no representa la ganancia histórica por tipo de cambio. Las posiciones sin precio o sin conversión quedan excluidas del total y se contabilizan como faltantes. No se calculan comisiones, dividendos, impuestos ni ajustes corporativos.
+Las posiciones se valoran con el precio del instrumento y su moneda. El costo y el valor actual se convierten con tipos de cambio actuales (ARS vía CCL): el resultado no representa la ganancia histórica por tipo de cambio. Las posiciones sin precio o sin conversión quedan excluidas del total y se contabilizan como faltantes. No se calculan comisiones, dividendos, impuestos ni ajustes corporativos.
 
-Las noticias permiten elegir inglés (predeterminado), español o ambos idiomas y filtrar entidades de Argentina, Estados Unidos o todo el mundo. «Todo el mercado» consulta cobertura general sin limitarla a la cartera. El país corresponde al mercado de la entidad, no al origen del medio. «Más noticias de [acción]» abre su listado individual; los filtros de idioma y país forman parte de la clave de caché.
+Las noticias permiten elegir inglés (predeterminado), español o ambos idiomas y filtrar entidades por país, región asiática o todo el mundo. «Todo el mercado» consulta cobertura general sin limitarla a la cartera. El país corresponde al mercado de la entidad, no al origen del medio. «Más noticias de [acción]» abre su listado individual; los filtros de idioma y país forman parte de la clave de caché.
 
 ## Privacidad y protección de cuotas
 
-La cartera, los costos y cantidades se guardan en `localStorage`; no se envían al servidor. Los símbolos consultados sí se envían a la API. Los widgets conectan el navegador con TradingView. Los respaldos contienen datos personales de cartera y no se sincronizan automáticamente entre dispositivos.
+La cartera, los costos y cantidades se guardan en `localStorage`. El análisis de perfil, solicitado por el usuario, envía símbolos, bolsas, sectores, divisas, etiquetas de riesgo y pesos porcentuales a Workers AI; no envía cantidades ni importes. Los símbolos consultados sí se envían a la API. Los widgets conectan el navegador con TradingView. Los respaldos contienen datos personales de cartera y no se sincronizan automáticamente entre dispositivos.
 
 La API utiliza caché compartida por centro de datos: cinco minutos para cotizaciones, treinta minutos para noticias y un día para búsquedas y análisis. Se prioriza la clave de respaldo, luego la tercera y finalmente la original ante cuota agotada o límite de consultas; no se rotan credenciales inválidas. La caché de noticias es por empresa y página, reutilizable entre listas y selección individual. El navegador también conserva los resultados durante treinta minutos en la sesión; las consultas simultáneas idénticas se agrupan. Los fallos parciales se indican y no se guardan en esa caché. Las claves y errores privados del proveedor no se devuelven al navegador.
 
-El análisis acepta únicamente identificadores de noticias previamente consultadas y almacenadas; no permite enviar prompts arbitrarios ni descargar URLs indicadas por el cliente. Tiene límites por IP e instancia. En Pages estos contadores son aproximados y no constituyen una cuota global distribuida. Antes de abrir el servicio a un público amplio, agregar control de acceso, límites globales durables y monitoreo del consumo.
+El análisis de noticias acepta únicamente identificadores de noticias previamente consultadas y almacenadas; no permite enviar prompts arbitrarios ni descargar URLs indicadas por el cliente. Tiene límites por IP e instancia. En Pages estos contadores son aproximados y no constituyen una cuota global distribuida. Antes de abrir el servicio a un público amplio, agregar control de acceso, límites globales durables y monitoreo del consumo.
 
 ## Próximas ampliaciones
 
@@ -112,3 +115,34 @@ El selector de la barra superior permite elegir Oscuro, Oscuro suave y Claro; el
 «Crear filtro» permite nombrar una selección de acciones, guardarla y volver a elegirla en «Noticias de». El filtro puede editarse o eliminarse, y conserva sus instrumentos aunque se quiten del seguimiento. Temas y filtros se guardan en `brujula:preferencias:v1` dentro de `localStorage`; son preferencias del navegador y no forman parte del respaldo de cartera. Se reutiliza la caché existente por empresa, página, idioma y mercado.
 
 Los modales se cierran con la cruz, Escape o un clic que comience y termine fuera; arrastrar una selección de texto hacia afuera no los cierra.
+
+## Mercados, multimoneda y análisis · v0.4.0
+
+La navegación agrupa Seguimiento, Mi portfolio y Contexto y herramientas. El buscador reconoce `AMS:VHYL`, `IBKR` y las fórmulas `=GOOGLEFINANCE("AMS:VHYL"; "price")` / `=GOOGLEFINANCE("IBKR"; "price")` como búsquedas; no ejecuta fórmulas. Ámsterdam y Londres conservan posiciones independientes para VHYL. Las noticias utilizan símbolos con sufijo de mercado para distinguir estas cotizaciones. Los filtros de país representan la plaza de cotización, no toda la exposición económica.
+
+### Monedas y precios
+
+- USD, ARS, EUR, GBP, CNY, HKD, JPY, CHF, CAD, AUD, BRL e INR como moneda final y de compra. La moneda de cotización se confirma al registrar; nunca se transforma automáticamente la divisa de una bolsa por la nacionalidad del emisor.
+- [Frankfurter](https://frankfurter.dev/) aporta unidades por USD y fecha de referencia. Los cruces usan `importe / tasaOrigen × tasaDestino`. ARS utiliza exclusivamente CCL de DolarAPI; si falta, no se sustituye por un cambio oficial.
+- Yahoo Finance aporta precios indicativos de las plazas admitidas mediante el endpoint público de gráficos. Es una integración sin garantía de disponibilidad ni cobertura contractual; no es una API oficial contratada. Se valida símbolo, moneda y fecha, y se normalizan GBp/GBX a GBP. El precio solo se usa cuando coincide con la moneda registrada. Data912 mantiene la cobertura anterior.
+- Los precios se consultan para el instrumento seleccionado y las posiciones, en tandas de hasta 20 y con caché de cinco minutos. La lista completa de exploración no descarga precios de todos sus instrumentos. La API puede fallar o limitar consultas: se informan faltantes y se permite registrar un precio manual fechado que tiene prioridad hasta borrarlo.
+- La moneda de compra es independiente de la de cotización. Por ejemplo, 2 títulos a 80 EUR equivalen a 200 USD si EUR/USD es 1,25; un costo de 90 USD por título da 20 USD de diferencia. Los dos lados se expresan en la moneda final antes de sumarse.
+- Los respaldos v1 anteriores siguen siendo válidos. Los campos opcionales de riesgo, moneda de compra y precio manual se validan al importar. Los totales incompletos se identifican como parciales; una cartera totalmente sin precio no se muestra como cero.
+
+### Evaluación financiera
+
+Al elegir un ticker, la sección solicita [fundamentos de TradingView](https://www.tradingview.com/widget-docs/widgets/symbol-details/fundamental-data/) y señales técnicas para su bolsa. La cobertura depende del proveedor. La ficha de 21 indicadores reproduce la estructura de la tabla del usuario, pero sus valores son manuales: no se extraen del iframe ni se inventan cuando faltan. Los umbrales son referencias orientativas, no recomendaciones. NIM y cobertura de intereses son métricas independientes; NIM no tiene un mínimo universal del 10%. En ETFs se advierte que hay que revisar composición, TER y estructura.
+
+Cada evaluación se guarda en `brujula:evaluacion:v1:<bolsa:ticker>` con fuente, período, notas y fecha. Tiene exportación JSON propia; no forma parte del respaldo de cartera ni se importa con ese respaldo.
+
+### Riesgo, IA y macroeconomía
+
+El riesgo bajo, medio o alto lo asigna el usuario. Los porcentajes usan el valor de mercado convertido, incluyendo una categoría sin clasificar y excluyendo posiciones sin valoración. No representan probabilidades de pérdida. La IA analiza hasta 100 posiciones valuadas, concentración y posibles solapamientos sin afirmar conocer la tolerancia personal del inversor ni la composición interna de fondos. El servidor valida pesos y campos, rechaza orígenes ajenos y limita consultas.
+
+El calendario incorpora una serie anual del [Banco Mundial / FMI](https://data.worldbank.org/indicator/FP.CPI.TOTL.ZG), con hasta ocho observaciones disponibles y variación en puntos porcentuales. No sustituye el último IPC mensual. EUR corresponde a la zona euro. Las reuniones y resultados del widget no se extraen automáticamente: se puede anotar el evento, elegir posiciones por moneda o toda la cartera e introducir tasas y sensibilidades.
+
+El escenario calcula `Δprecio % = Δtasa en puntos porcentuales × sensibilidadTasa + Δinflación en puntos porcentuales × sensibilidadInflación`. Las sensibilidades las introduce el usuario, no son coeficientes inferidos ni predicciones. Rechaza una pérdida superior al 100% y mantiene las divisas constantes. La explicación de canales se basa en los [mecanismos de transmisión de la Fed](https://www.federalreserve.gov/monetarypolicy/monetary-policy-what-are-its-goals-how-does-it-work.htm).
+
+### Verificaciones adicionales
+
+Las pruebas cubren cruces de divisas, costos en otra moneda, GBp, identidad por mercado, respaldos anteriores, exclusión de datos faltantes, riesgo por valor, validación del perfil IA y simulación macroeconómica. Las pruebas de navegador recorren ETFs y noticias por región, la fórmula de VHYL, compra en USD con total en GBP, perfil, fundamentos separados por ticker y ausencia de desborde en móvil.

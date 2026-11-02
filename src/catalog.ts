@@ -44,8 +44,141 @@ export const catalog: Asset[] = entries.map(
     tv: `${exchange}:${symbol}`,
   }),
 );
+catalog.push(
+  ...(
+    [
+      [
+        "VHYL",
+        "Vanguard FTSE All-World High Dividend Yield UCITS ETF",
+        "EURONEXT",
+        "nl",
+        "EUR",
+        "etf",
+      ],
+      [
+        "VWRL",
+        "Vanguard FTSE All-World UCITS ETF",
+        "EURONEXT",
+        "nl",
+        "EUR",
+        "etf",
+      ],
+      [
+        "VWCE",
+        "Vanguard FTSE All-World UCITS ETF acumulación",
+        "XETR",
+        "de",
+        "EUR",
+        "etf",
+      ],
+      [
+        "VHYL",
+        "Vanguard High Dividend Yield · Londres",
+        "LSE",
+        "gb",
+        "GBP",
+        "etf",
+      ],
+      [
+        "VHYD",
+        "Vanguard High Dividend Yield · Londres USD",
+        "LSE",
+        "gb",
+        "USD",
+        "etf",
+      ],
+      ["SPY", "SPDR S&P 500 ETF", "AMEX", "us", "USD", "etf"],
+      ["QQQ", "Invesco QQQ Trust", "NASDAQ", "us", "USD", "etf"],
+      ["IBKR", "Interactive Brokers Group", "NASDAQ", "us", "USD", "accion"],
+      ["ASML", "ASML Holding · ADR", "NASDAQ", "us", "USD", "accion"],
+      ["BABA", "Alibaba · ADR", "NYSE", "us", "USD", "accion"],
+      ["9988", "Alibaba · Hong Kong", "HKEX", "hk", "HKD", "accion"],
+      ["600519", "Kweichow Moutai", "SSE", "cn", "CNY", "accion"],
+      ["000001", "Ping An Bank", "SZSE", "cn", "CNY", "accion"],
+    ] as const
+  ).map(([symbol, name, exchange, country, currency, kind]) => ({
+    id: exchange + ":" + symbol,
+    symbol,
+    name,
+    exchange,
+    country,
+    currency,
+    kind,
+    sector:
+      kind === "etf"
+        ? "Fondos diversificados"
+        : symbol === "IBKR" || symbol === "000001"
+          ? "Finanzas"
+          : "Otros",
+    underlying: symbol,
+    tv: exchange + ":" + symbol,
+  })),
+);
+export const countries = [
+  "us",
+  "ar",
+  "nl",
+  "de",
+  "fr",
+  "gb",
+  "cn",
+  "hk",
+  "jp",
+  "in",
+  "ch",
+  "ca",
+  "au",
+  "br",
+  "es",
+  "it",
+];
+export const asianCountries = ["cn", "hk", "jp", "in"];
+export function matchesCountry(country: string, filter: string) {
+  return (
+    !filter ||
+    filter === "todos" ||
+    (filter === "asia" ? asianCountries.includes(country) : country === filter)
+  );
+}
+export function searchText(query: string) {
+  return query
+    .trim()
+    .replace(/^=GOOGLEFINANCE\(["']([^"']+)["'].*$/i, "$1")
+    .replace(/^AMS:/i, "EURONEXT:")
+    .replace(/^FRA:/i, "FWB:")
+    .toLowerCase();
+}
+export function newsSymbol(asset: Asset): string {
+  if (
+    asset.kind === "cedear" ||
+    asset.country === "us" ||
+    asset.country === "ar" ||
+    asset.underlying.includes(".")
+  )
+    return asset.underlying;
+  const suffix: Record<string, string> = {
+    nl: ".AS",
+    de: ".DE",
+    gb: ".L",
+    hk: ".HK",
+    jp: ".T",
+    ch: ".SW",
+    fr: ".PA",
+    ca: ".TO",
+    au: ".AX",
+  };
+  const ending =
+    asset.exchange === "SSE"
+      ? ".SS"
+      : asset.exchange === "SZSE"
+        ? ".SZ"
+        : suffix[asset.country];
+  return asset.underlying + (ending || "");
+}
 export const cedearSeeds: Asset[] = catalog
-  .filter((a) => a.country === "us" && a.symbol !== "YPF")
+  .filter(
+    (a) => a.country === "us" && a.kind === "accion" && a.symbol !== "YPF",
+  )
   .map((a) => ({
     ...a,
     id: `BCBA:${a.symbol}`,

@@ -6,7 +6,7 @@ export default function TradingWidget({
 }: {
   symbol: string;
   theme?: "dark" | "light";
-  kind?: "chart" | "profile" | "calendar";
+  kind?: "chart" | "profile" | "calendar" | "financials" | "technical";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -22,7 +22,11 @@ export default function TradingWidget({
         ? "advanced-chart"
         : kind === "calendar"
           ? "events"
-          : "symbol-profile";
+          : kind === "financials"
+            ? "financials"
+            : kind === "technical"
+              ? "technical-analysis"
+              : "symbol-profile";
     script.src = `https://s3.tradingview.com/external-embedding/embed-widget-${file}.js`;
     script.async = true;
     const options =
@@ -48,19 +52,25 @@ export default function TradingWidget({
               isTransparent: false,
               locale: "es",
               importanceFilter: "0,1",
-              countryFilter: "us,ar,eu,jp,cn",
+              countryFilter: "us,ar,eu,gb,de,fr,nl,jp,cn,hk,in",
             }
           : {
               width: "100%",
-              height: 330,
+              height:
+                kind === "financials" ? 550 : kind === "technical" ? 450 : 330,
+              displayMode: "regular",
+              interval: "1D",
               colorTheme: theme,
               isTransparent: false,
               symbol,
               locale: "es",
             };
     script.textContent = JSON.stringify(options);
-    container.appendChild(script);
-    return () => container.replaceChildren();
+    const timer = window.setTimeout(() => container.appendChild(script), 0);
+    return () => {
+      window.clearTimeout(timer);
+      container.replaceChildren();
+    };
   }, [symbol, kind, theme]);
   return (
     <div className={`widget-shell widget-${kind}`}>

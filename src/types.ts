@@ -5,7 +5,7 @@ export type Asset = {
   exchange: string;
   country: string;
   currency: string;
-  kind: "accion" | "cedear";
+  kind: "accion" | "cedear" | "etf";
   sector: string;
   underlying: string;
   tv: string;
@@ -15,13 +15,17 @@ export type Position = {
   asset: Asset;
   quantity: number;
   cost: number;
+  costCurrency?: string;
+  risk?: "alto" | "medio" | "bajo";
+  manualPrice?: number;
+  manualPriceAt?: string;
   updatedAt: string;
 };
 export type LocalData = {
   version: 1;
   watchlist: Asset[];
   positions: Position[];
-  currency: "USD" | "ARS";
+  currency: string;
   lastVisit: string;
   lists: string[];
   assignments: Record<string, string>;
@@ -33,6 +37,9 @@ export type Quote = {
   volume: number | null;
 };
 export type Market = {
+  fx?: Record<string, number>;
+  fxDate?: string;
+  global?: Record<string, Quote & { currency: string; asOf: string }>;
   usa: Quote[];
   cedears: Quote[];
   argentina?: Quote[];
