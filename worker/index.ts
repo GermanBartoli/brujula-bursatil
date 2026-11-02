@@ -336,7 +336,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/health")
     return json({
       ok: true,
-      version: "0.2.0",
+      version: "0.3.0",
       news: !!env.MARKETAUX_API_KEY,
       ai: !!env.AI,
     });
@@ -422,7 +422,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     };
     const language = url.searchParams.get("language") || "en";
     const country = url.searchParams.get("country") || "";
-    if (!["en", "es"].includes(language) || !["", "ar", "us"].includes(country))
+    if (
+      !["en", "es", "en,es"].includes(language) ||
+      !["", "ar", "us"].includes(country)
+    )
       throw new ApiError(400, "Idioma o mercado de noticias inválido.");
     const page = Number(url.searchParams.get("page") || 1);
     if (!Number.isInteger(page) || page < 1 || page > 100)

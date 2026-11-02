@@ -1,3 +1,9 @@
+import {
+  loadPreferences,
+  preferencesKey,
+  type Theme,
+  type NewsFilter,
+} from "./preferences";
 import { argentinaSeeds } from "./argentina";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -164,6 +170,13 @@ function Modal({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const startedOutside = useRef(false);
+  function outside(x: number, y: number) {
+    const box = ref.current?.getBoundingClientRect();
+    return (
+      !!box && (x < box.left || x > box.right || y < box.top || y > box.bottom)
+    );
+  }
   useEffect(() => {
     ref.current?.showModal();
     const dialog = ref.current;
@@ -173,8 +186,20 @@ function Modal({
     <dialog
       ref={ref}
       onCancel={onClose}
+      onPointerDown={(e) => {
+        startedOutside.current = outside(e.clientX, e.clientY);
+      }}
+      onPointerCancel={() => {
+        startedOutside.current = false;
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) onClose();
+        if (
+          startedOutside.current &&
+          e.target === ref.current &&
+          outside(e.clientX, e.clientY)
+        )
+          onClose();
+        startedOutside.current = false;
       }}
     >
       <div className="modal-head">
@@ -311,6 +336,16 @@ function NewsCard({
 }
 export default function App() {
   const initial = useMemo(load, []);
+  const [preferences, setPreferences] = useState(loadPreferences);
+  const [filterEditor, setFilterEditor] = useState<NewsFilter | null>(null);
+  useEffect(() => {
+    document.documentElement.dataset.theme = preferences.theme;
+    try {
+      localStorage.setItem(preferencesKey, JSON.stringify(preferences));
+    } catch {
+      /* Las preferencias siguen disponibles durante esta sesión. */
+    }
+  }, [preferences]);
   const [data, setData] = useState<LocalData>(initial.data),
     [storageError, setStorageError] = useState(initial.error);
   const previousVisit = useRef(initial.data.lastVisit);
@@ -426,6 +461,7 @@ export default function App() {
       ),
     ).values(),
   ];
+  const customFilter = preferences.filters.find((f) => f.id === newsScope);
   const newsAsset = followed.find((a) => a.id === newsScope) || selected;
   const allSymbols = useMemo(
     () =>
@@ -433,9 +469,11 @@ export default function App() {
         ...new Set(
           (newsScope === "mercado"
             ? []
-            : newsScope !== "lista"
-              ? [newsAsset]
-              : [...data.watchlist, ...data.positions.map((p) => p.asset)]
+            : customFilter
+              ? customFilter.assets
+              : newsScope !== "lista"
+                ? [newsAsset]
+                : [...data.watchlist, ...data.positions.map((p) => p.asset)]
           )
             .map((a) => a.underlying)
             .filter(Boolean),
@@ -443,7 +481,7 @@ export default function App() {
       ]
         .sort()
         .join(","),
-    [data.watchlist, data.positions, newsAsset, newsScope],
+    [data.watchlist, data.positions, newsAsset, newsScope, customFilter],
   );
   const symbols = allSymbols
     .split(",")
@@ -579,8 +617,13 @@ export default function App() {
     if (uploadRef.current) uploadRef.current.value = "";
   }
   function assetForNews(article: Article): Asset | null {
-    if (newsScope !== "lista" && newsScope !== "mercado") return newsAsset;
-    const known = [...followed, ...assets].find((asset) =>
+    if (!customFilter && newsScope !== "lista" && newsScope !== "mercado")
+      return newsAsset;
+    const known = [
+      ...(customFilter?.assets || []),
+      ...followed,
+      ...assets,
+    ].find((asset) =>
       article.entities.some((e) => e.symbol === asset.underlying),
     );
     if (known) return known;
@@ -615,6 +658,26 @@ export default function App() {
         </button>
       </div>
       <div className="news-controls">
+        <button
+          className="secondary compact"
+          onClick={() =>
+            setFilterEditor({
+              id: `filtro:${crypto.randomUUID()}`,
+              name: "",
+              assets: [],
+            })
+          }
+        >
+          Crear filtro
+        </button>
+        {customFilter && (
+          <button
+            className="secondary compact"
+            onClick={() => setFilterEditor(customFilter)}
+          >
+            Editar filtro
+          </button>
+        )}
         <select
           aria-label="Noticias de"
           value={newsScope}
@@ -622,6 +685,11 @@ export default function App() {
         >
           <option value="lista">Mi seguimiento</option>
           <option value="mercado">Todo el mercado</option>
+          {preferences.filters.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name} · filtro
+            </option>
+          ))}
           {followed.map((a) => (
             <option key={a.id} value={a.id}>
               {a.symbol} · {a.name}
@@ -643,6 +711,7 @@ export default function App() {
         >
           <option value="en">Inglés</option>
           <option value="es">Español</option>
+          <option value="en,es">Ambos idiomas</option>
         </select>
         <select
           aria-label="Mercado de las noticias"
@@ -966,6 +1035,20 @@ export default function App() {
             </strong>
           </div>
           <div className="top-actions">
+            <select
+              aria-label="Tema de la aplicación"
+              value={preferences.theme}
+              onChange={(e) =>
+                setPreferences((p) => ({
+                  ...p,
+                  theme: e.target.value as Theme,
+                }))
+              }
+            >
+              <option value="oscuro">Oscuro</option>
+              <option value="suave">Oscuro suave</option>
+              <option value="claro">Claro</option>
+            </select>
             <button
               className="search-trigger"
               onClick={() => setSearchOpen(true)}
@@ -1177,7 +1260,10 @@ export default function App() {
                         : "La disponibilidad depende del mercado"}
                     </small>
                   </div>
-                  <TradingWidget symbol={selected.tv} />
+                  <TradingWidget
+                    theme={preferences.theme === "claro" ? "light" : "dark"}
+                    symbol={selected.tv}
+                  />
                   {selected.kind === "cedear" && (
                     <div className="underlying">
                       <span>
@@ -1589,13 +1675,21 @@ export default function App() {
                     Próximos balances <ExternalLink size={15} />
                   </a>
                 </div>
-                <TradingWidget kind="calendar" symbol="" />
+                <TradingWidget
+                  theme={preferences.theme === "claro" ? "light" : "dark"}
+                  kind="calendar"
+                  symbol=""
+                />
               </section>
               <section className="panel">
                 <div className="section-head">
                   <h2>Conocé la empresa · {selected.symbol}</h2>
                 </div>
-                <TradingWidget kind="profile" symbol={selected.tv} />
+                <TradingWidget
+                  theme={preferences.theme === "claro" ? "light" : "dark"}
+                  kind="profile"
+                  symbol={selected.tv}
+                />
                 <p className="footnote">
                   Los próximos balances se consultan en TradingView. El
                   calendario integrado muestra eventos económicos, no una agenda
@@ -1756,7 +1850,7 @@ export default function App() {
               <section className="panel settings-panel">
                 <Compass size={27} />
                 <h2>Hecho para crecer con vos</h2>
-                <p>Brújula Bursátil · v0.1.0</p>
+                <p>Brújula Bursátil · v0.3.0</p>
                 <p>
                   Un proyecto personal de German Bartoli, con la colaboración de
                   Codex. Código abierto, datos personales locales.
@@ -1786,6 +1880,41 @@ export default function App() {
           </footer>
         </main>
       </div>
+      {filterEditor && (
+        <NewsFilterModal
+          filter={filterEditor}
+          assets={[
+            ...new Map(
+              [...followed, ...filterEditor.assets, ...assets].map((a) => [
+                a.id,
+                a,
+              ]),
+            ).values(),
+          ]}
+          onClose={() => setFilterEditor(null)}
+          onSave={(filter) => {
+            setPreferences((p) => ({
+              ...p,
+              filters: [...p.filters.filter((f) => f.id !== filter.id), filter],
+            }));
+            setNewsScope(filter.id);
+            setNewsMode("direct");
+            setFilterEditor(null);
+          }}
+          onDelete={
+            preferences.filters.some((f) => f.id === filterEditor.id)
+              ? () => {
+                  setPreferences((p) => ({
+                    ...p,
+                    filters: p.filters.filter((f) => f.id !== filterEditor.id),
+                  }));
+                  if (newsScope === filterEditor.id) setNewsScope("lista");
+                  setFilterEditor(null);
+                }
+              : undefined
+          }
+        />
+      )}
       {searchOpen && (
         <Modal
           title="Encontrá tu próximo horizonte"
@@ -2069,6 +2198,116 @@ function PositionModal({
             </button>
           )}
         </div>
+      </form>
+    </Modal>
+  );
+}
+
+function NewsFilterModal({
+  filter,
+  assets,
+  onSave,
+  onClose,
+  onDelete,
+}: {
+  filter: NewsFilter;
+  assets: Asset[];
+  onSave: (filter: NewsFilter) => void;
+  onClose: () => void;
+  onDelete?: () => void;
+}) {
+  const [name, setName] = useState(filter.name);
+  const [chosen, setChosen] = useState(filter.assets.map((a) => a.id));
+  const [query, setQuery] = useState("");
+  const filtered = assets.filter((a) =>
+    `${a.symbol} ${a.name}`
+      .toLocaleLowerCase()
+      .includes(query.toLocaleLowerCase()),
+  );
+  return (
+    <Modal
+      title={
+        filter.name ? "Editar filtro de noticias" : "Crear filtro de noticias"
+      }
+      onClose={onClose}
+    >
+      <form
+        className="modal-body news-filter-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim() && chosen.length)
+            onSave({
+              ...filter,
+              name: name.trim(),
+              assets: assets.filter((a) => chosen.includes(a.id)),
+            });
+        }}
+      >
+        <label>
+          Nombre del filtro
+          <input
+            autoFocus
+            value={name}
+            maxLength={40}
+            required
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ej. Tecnología y energía"
+          />
+        </label>
+        <label>
+          Buscar acciones del filtro
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Nombre o símbolo"
+          />
+        </label>
+        <p className="muted">
+          Elegí las acciones que quieras combinar. {chosen.length}{" "}
+          seleccionadas.
+        </p>
+        <div className="filter-options">
+          {filtered.map((a) => (
+            <label key={a.id} className="filter-option">
+              <input
+                type="checkbox"
+                checked={chosen.includes(a.id)}
+                onChange={(e) =>
+                  setChosen((ids) =>
+                    e.target.checked
+                      ? [...ids, a.id]
+                      : ids.filter((id) => id !== a.id),
+                  )
+                }
+              />
+              <span>
+                <strong>
+                  {a.symbol} · {a.exchange}
+                </strong>
+                <small>{a.name}</small>
+              </span>
+            </label>
+          ))}
+          {!filtered.length && <p className="muted">Sin coincidencias.</p>}
+        </div>
+        <div className="button-row">
+          <button
+            className="primary"
+            type="submit"
+            disabled={!name.trim() || !chosen.length}
+          >
+            Guardar filtro
+          </button>
+          {onDelete && (
+            <button className="danger-btn" type="button" onClick={onDelete}>
+              Eliminar filtro
+            </button>
+          )}
+        </div>
+        <p className="footnote">
+          Se guarda en este navegador. Los filtros de idioma y mercado también
+          se aplican a esta selección.
+        </p>
       </form>
     </Modal>
   );

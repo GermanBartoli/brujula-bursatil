@@ -244,6 +244,18 @@ test("Noticias por empresa: caché compartida, paginación, deduplicación y err
         .status,
       400,
     );
+    const beforeBoth = calls.length;
+    await worker.fetch(
+      new Request("https://test/api/news?symbols=AAPL&language=en,es"),
+      env,
+    );
+    assert.equal(calls.length, beforeBoth + 1);
+    assert.ok(calls.at(-1)?.endsWith(":en,es:"));
+    await worker.fetch(
+      new Request("https://test/api/news?symbols=AAPL&language=en,es"),
+      env,
+    );
+    assert.equal(calls.length, beforeBoth + 1);
     assert.ok(!partial.warnings[0].includes("secreto-prueba"));
     assert.equal(
       (

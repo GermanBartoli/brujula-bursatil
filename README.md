@@ -83,7 +83,7 @@ El calendario integrado es económico; los balances se consultan mediante enlace
 
 Las posiciones se valoran con el precio del instrumento y su moneda. Tanto el costo como el valor actual se convierten con el mismo CCL: el resultado no representa la ganancia histórica por tipo de cambio. Las posiciones sin precio o sin conversión quedan excluidas del total y se contabilizan como faltantes. No se calculan comisiones, dividendos, impuestos ni ajustes corporativos.
 
-Las noticias permiten elegir inglés (predeterminado) o español y filtrar entidades de Argentina, Estados Unidos o todo el mundo. «Todo el mercado» consulta cobertura general sin limitarla a la cartera. El país corresponde al mercado de la entidad, no al origen del medio. «Más noticias de [acción]» abre su listado individual; los filtros de idioma y país forman parte de la clave de caché.
+Las noticias permiten elegir inglés (predeterminado), español o ambos idiomas y filtrar entidades de Argentina, Estados Unidos o todo el mundo. «Todo el mercado» consulta cobertura general sin limitarla a la cartera. El país corresponde al mercado de la entidad, no al origen del medio. «Más noticias de [acción]» abre su listado individual; los filtros de idioma y país forman parte de la clave de caché.
 
 ## Privacidad y protección de cuotas
 
@@ -104,3 +104,11 @@ El análisis acepta únicamente identificadores de noticias previamente consulta
 ## Licencia
 
 Código bajo licencia MIT. Las marcas, widgets y datos de terceros conservan sus condiciones de uso.
+
+## Apariencia y filtros personales
+
+El selector de la barra superior permite elegir Oscuro, Oscuro suave y Claro; el gráfico y el calendario también acompañan el modo claro. Las noticias se presentan en tarjetas separadas.
+
+«Crear filtro» permite nombrar una selección de acciones, guardarla y volver a elegirla en «Noticias de». El filtro puede editarse o eliminarse, y conserva sus instrumentos aunque se quiten del seguimiento. Temas y filtros se guardan en `brujula:preferencias:v1` dentro de `localStorage`; son preferencias del navegador y no forman parte del respaldo de cartera. Se reutiliza la caché existente por empresa, página, idioma y mercado.
+
+Los modales se cierran con la cruz, Escape o un clic que comience y termine fuera; arrastrar una selección de texto hacia afuera no los cierra.

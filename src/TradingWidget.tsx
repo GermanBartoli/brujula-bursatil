@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
 export default function TradingWidget({
   symbol,
+  theme = "dark",
   kind = "chart",
 }: {
   symbol: string;
+  theme?: "dark" | "light";
   kind?: "chart" | "profile" | "calendar";
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -30,7 +32,7 @@ export default function TradingWidget({
             symbol,
             interval: "D",
             timezone: "America/Argentina/Buenos_Aires",
-            theme: "dark",
+            theme,
             style: "1",
             locale: "es",
             allow_symbol_change: true,
@@ -42,7 +44,7 @@ export default function TradingWidget({
           ? {
               width: "100%",
               height: "600",
-              colorTheme: "dark",
+              colorTheme: theme,
               isTransparent: false,
               locale: "es",
               importanceFilter: "0,1",
@@ -51,7 +53,7 @@ export default function TradingWidget({
           : {
               width: "100%",
               height: 330,
-              colorTheme: "dark",
+              colorTheme: theme,
               isTransparent: false,
               symbol,
               locale: "es",
@@ -59,7 +61,7 @@ export default function TradingWidget({
     script.textContent = JSON.stringify(options);
     container.appendChild(script);
     return () => container.replaceChildren();
-  }, [symbol, kind]);
+  }, [symbol, kind, theme]);
   return (
     <div className={`widget-shell widget-${kind}`}>
       <div className="tradingview-widget-container" ref={ref} />
