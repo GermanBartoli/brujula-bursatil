@@ -663,7 +663,7 @@ main {
   position: relative;
   padding: 0 9px;
 }
-.widget-shell.chart {
+.widget-shell.widget-chart {
   height: 365px;
 }
 .tradingview-widget-container {
@@ -677,10 +677,10 @@ main {
   color: #92a58b;
   line-height: 22px;
 }
-.widget-shell.calendar {
+.widget-shell.widget-calendar {
   height: 630px;
 }
-.widget-shell.profile {
+.widget-shell.widget-profile {
   height: 370px;
 }
 .underlying {
@@ -1369,7 +1369,7 @@ dialog::backdrop {
   .dashboard-grid {
     grid-template-columns: minmax(0, 1fr) 335px;
   }
-  .widget-shell.chart {
+  .widget-shell.widget-chart {
     height: 410px;
   }
   .radar-item {
@@ -1682,7 +1682,7 @@ dialog::backdrop {
   .chart-price strong {
     font-size: 26px;
   }
-  .widget-shell.chart {
+  .widget-shell.widget-chart {
     height: 360px;
   }
   .chart-panel .selected-company h2 {
@@ -1818,7 +1818,7 @@ dialog::backdrop {
     font-size: 8px;
     margin-top: 20px;
   }
-  .widget-shell.calendar {
+  .widget-shell.widget-calendar {
     height: 620px;
   }
   .profile {

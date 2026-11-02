@@ -43,7 +43,7 @@ export default function TradingWidget({
               width: "100%",
               height: "600",
               colorTheme: "dark",
-              isTransparent: true,
+              isTransparent: false,
               locale: "es",
               importanceFilter: "0,1",
               countryFilter: "us,ar,eu,jp,cn",
@@ -52,7 +52,7 @@ export default function TradingWidget({
               width: "100%",
               height: 330,
               colorTheme: "dark",
-              isTransparent: true,
+              isTransparent: false,
               symbol,
               locale: "es",
             };
@@ -61,7 +61,7 @@ export default function TradingWidget({
     return () => container.replaceChildren();
   }, [symbol, kind]);
   return (
-    <div className={`widget-shell ${kind}`}>
+    <div className={`widget-shell widget-${kind}`}>
       <div className="tradingview-widget-container" ref={ref} />
       <a
         className="widget-credit"
