@@ -59,3 +59,28 @@ test("Rechaza respaldos incompatibles, duplicados y cantidades inválidas", () =
     parseBackup({ ...d, watchlist: [{ ...asset, symbol: "<script>" }] }),
   );
 });
+
+test("TGNO4 se valora como acción argentina en pesos, separada del CEDEAR y ADR", async () => {
+  const { argentinaSeeds } = await import("../src/argentina.ts");
+  const tgn = argentinaSeeds.find((a) => a.symbol === "TGNO4")!;
+  assert.ok(tgn.name.includes("Transportadora de Gas del Norte"));
+  assert.equal(tgn.kind, "accion");
+  assert.equal(tgn.underlying, "TGNO4.BA");
+  assert.equal(tgn.tv, "BCBA:TGNO4");
+  assert.ok(argentinaSeeds.length >= 70);
+  assert.equal(
+    new Set(argentinaSeeds.map((a) => a.id)).size,
+    argentinaSeeds.length,
+  );
+  const result = totals(
+    [{ asset: tgn, quantity: 2, cost: 2000, updatedAt: "" }],
+    {
+      ...market,
+      argentina: [{ symbol: "TGNO4", price: 3000, change: 1, volume: 10 }],
+    },
+    "ARS",
+  );
+  assert.equal(result.value, 6000);
+  assert.equal(result.profit, 2000);
+  assert.equal(result.missing, 0);
+});

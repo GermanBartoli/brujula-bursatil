@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import worker, {
   cedearCatalog,
+  entityAsset,
   marketaux,
   normalizeQuotes,
   parseAnalysis,
@@ -29,7 +30,7 @@ test("El catálogo no confunde especies D/C en dólares con CEDEARs en pesos", (
   );
   assert.ok(result.every((a) => a.currency === "ARS"));
 });
-test("Usa respaldo únicamente cuando se agota la cuota de la clave principal", async () => {
+test("Prioriza respaldo y usa la clave principal al agotarse su cuota", async () => {
   const calls: string[] = [];
   const fake = async (input: RequestInfo | URL) => {
     calls.push(String(input));
@@ -42,7 +43,7 @@ test("Usa respaldo únicamente cuando se agota la cuota de la clave principal", 
   };
   await marketaux(env, "news/all", {}, fake as typeof fetch);
   assert.equal(calls.length, 2);
-  assert.ok(calls[1].includes("respaldo-prueba"));
+  assert.ok(calls[0].includes("respaldo-prueba"));
 });
 test("No rota por credencial inválida ni filtra el error o la clave del proveedor", async () => {
   let calls = 0;
@@ -115,4 +116,158 @@ test("Rechaza símbolos inválidos, métodos incorrectos y análisis entre sitio
     ).status,
     403,
   );
+});
+
+test("La tercera clave recibe la consulta cuando se agota el respaldo", async () => {
+  const keys: string[] = [];
+  const fake = async (input: RequestInfo | URL) => {
+    keys.push(new URL(String(input)).searchParams.get("api_token")!);
+    return keys.length < 3
+      ? Response.json(
+          { error: { code: "usage_limit_reached" } },
+          { status: 429 },
+        )
+      : Response.json({ data: [] });
+  };
+  await marketaux(
+    { ...env, MARKETAUX_API_KEY_THIRD: "tercera-prueba" },
+    "news/all",
+    {},
+    fake as typeof fetch,
+  );
+  assert.deepEqual(keys, [
+    "respaldo-prueba",
+    "tercera-prueba",
+    "secreto-prueba",
+  ]);
+});
+
+test("Noticias por empresa: caché compartida, paginación, deduplicación y errores parciales", async () => {
+  const originalFetch = globalThis.fetch;
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "caches");
+  const saved = new Map<string, Response>();
+  Object.defineProperty(globalThis, "caches", {
+    configurable: true,
+    value: {
+      default: {
+        match: async (r: Request) => saved.get(r.url)?.clone(),
+        put: async (r: Request, response: Response) => {
+          saved.set(r.url, response.clone());
+        },
+      },
+    },
+  });
+  const calls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    const symbol = url.searchParams.get("symbols")!;
+    const page = url.searchParams.get("page");
+    calls.push(
+      `${symbol}:${page}:${url.searchParams.get("language")}:${url.searchParams.get("countries") || ""}`,
+    );
+    if (symbol === "FAIL")
+      return Response.json(
+        { error: { code: "invalid_api_token" } },
+        { status: 401 },
+      );
+    return Response.json({
+      meta: { found: 6, limit: 3 },
+      data: [
+        {
+          uuid: `comun-${page}`,
+          title: "Noticia común",
+          url: `https://medio.test/comun-${page}`,
+          entities: [{ symbol }],
+          published_at: "2026-11-02",
+        },
+        {
+          uuid: `${symbol}-${page}`,
+          title: symbol,
+          url: `https://medio.test/${symbol}-${page}`,
+          entities: [{ symbol }],
+          published_at: "2026-11-02",
+        },
+      ],
+    });
+  };
+  const get = async (symbols: string, page = 1) => {
+    const response = await worker.fetch(
+      new Request(`https://test/api/news?symbols=${symbols}&page=${page}`),
+      env,
+    );
+    assert.equal(response.status, 200);
+    return response.json() as Promise<any>;
+  };
+  try {
+    const [first, concurrent] = await Promise.all([
+      get("AAPL,NVDA"),
+      get("NVDA,AAPL"),
+    ]);
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every((c) => c.endsWith(":en:")));
+    assert.equal(first.data.length, 3);
+    assert.equal(concurrent.data.length, 3);
+    assert.equal(first.data[0].entities.length, 2);
+    assert.equal(first.hasMore, true);
+    await get("AAPL");
+    assert.equal(calls.length, 2);
+    const second = await get("AAPL", 2);
+    assert.equal(calls.length, 3);
+    assert.equal(second.hasMore, false);
+    assert.ok(second.data.every((a: any) => a.uuid.endsWith("-2")));
+    const partial = await get("AAPL,FAIL");
+    assert.equal(partial.data.length, 2);
+    assert.equal(partial.warnings.length, 1);
+    const beforeFilters = calls.length;
+    await worker.fetch(
+      new Request("https://test/api/news?symbols=AAPL&language=es&country=ar"),
+      env,
+    );
+    assert.equal(calls.length, beforeFilters + 1);
+    assert.ok(calls.at(-1)?.endsWith(":es:ar"));
+    await worker.fetch(
+      new Request("https://test/api/news?symbols=AAPL&language=es&country=ar"),
+      env,
+    );
+    assert.equal(calls.length, beforeFilters + 1);
+    assert.equal(
+      (
+        await worker.fetch(
+          new Request("https://test/api/news?language=fr"),
+          env,
+        )
+      ).status,
+      400,
+    );
+    assert.equal(
+      (await worker.fetch(new Request("https://test/api/news?country=xx"), env))
+        .status,
+      400,
+    );
+    assert.ok(!partial.warnings[0].includes("secreto-prueba"));
+    assert.equal(
+      (
+        await worker.fetch(
+          new Request("https://test/api/news?symbols=AAPL&page=0"),
+          env,
+        )
+      ).status,
+      400,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (descriptor) Object.defineProperty(globalThis, "caches", descriptor);
+    else Reflect.deleteProperty(globalThis, "caches");
+  }
+});
+
+test("La búsqueda remota argentina coincide con el instrumento local", () => {
+  const asset = entityAsset({
+    symbol: "TGNO4.BA",
+    name: "Transportadora de Gas del Norte",
+    country: "ar",
+    exchange: null,
+  });
+  assert.equal(asset?.id, "BCBA:TGNO4");
+  assert.equal(asset?.currency, "ARS");
 });

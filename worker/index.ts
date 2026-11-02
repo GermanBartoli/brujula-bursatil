@@ -1,3 +1,4 @@
+import { argentinaSeeds } from "../src/argentina.ts";
 import { catalog, cedearSeeds, currencyFor } from "../src/catalog.ts";
 import type { Analysis, Article, Asset, Quote } from "../src/types";
 type Limiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
@@ -5,6 +6,7 @@ export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
   MARKETAUX_API_KEY?: string;
   MARKETAUX_API_KEY_BACKUP?: string;
+  MARKETAUX_API_KEY_THIRD?: string;
   AI?: { run(model: string, input: unknown): Promise<unknown> };
   API_LIMITER?: Limiter;
   AI_LIMITER?: Limiter;
@@ -44,6 +46,7 @@ function cache() {
   return (globalThis.caches as unknown as { default?: Cache } | undefined)
     ?.default;
 }
+const pending = new Map<string, Promise<unknown>>();
 async function cached<T>(
   key: string,
   ttl: number,
@@ -55,18 +58,28 @@ async function cached<T>(
     );
   const hit = await c?.match(request);
   if (hit) return hit.json() as Promise<T>;
-  const data = await producer();
-  if (c)
-    await c.put(
-      request,
-      new Response(JSON.stringify(data), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": `public,max-age=${ttl}`,
-        },
-      }),
-    );
-  return data;
+  const active = pending.get(key);
+  if (active) return active as Promise<T>;
+  const task = (async () => {
+    const data = await producer();
+    if (c)
+      await c.put(
+        request,
+        new Response(JSON.stringify(data), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public,max-age=${ttl}`,
+          },
+        }),
+      );
+    return data;
+  })();
+  pending.set(key, task);
+  try {
+    return await task;
+  } finally {
+    pending.delete(key);
+  }
 }
 async function fetchJson(url: URL | string) {
   const r = await fetch(url, {
@@ -86,9 +99,11 @@ export async function marketaux(
   params: Record<string, string>,
   fetcher: typeof fetch = fetch,
 ): Promise<any> {
-  const keys = [env.MARKETAUX_API_KEY, env.MARKETAUX_API_KEY_BACKUP].filter(
-    Boolean,
-  ) as string[];
+  const keys = [
+    env.MARKETAUX_API_KEY_BACKUP,
+    env.MARKETAUX_API_KEY_THIRD,
+    env.MARKETAUX_API_KEY,
+  ].filter(Boolean) as string[];
   if (!keys.length)
     throw new ApiError(503, "Falta configurar el servicio de noticias.");
   for (let i = 0; i < keys.length; i++) {
@@ -169,11 +184,12 @@ export function cedearCatalog(quotes: Quote[], links: unknown): Asset[] {
     });
 }
 async function market() {
-  return cached("market", 300, async () => {
+  return cached("market:v2", 300, async () => {
     const results = await Promise.allSettled([
       fetchJson("https://data912.com/live/usa_stocks"),
       fetchJson("https://data912.com/live/arg_cedears"),
       fetchJson("https://dolarapi.com/v1/dolares/contadoconliqui"),
+      fetchJson("https://data912.com/live/arg_stocks"),
     ]);
     const warnings: string[] = [];
     const get = (index: number) => {
@@ -184,15 +200,22 @@ async function market() {
           "Cotizaciones de EE. UU. no disponibles.",
           "Cotizaciones de CEDEARs no disponibles.",
           "Conversión CCL no disponible.",
+          "Cotizaciones argentinas no disponibles.",
         ][index],
       );
       return null;
     };
     const usa = get(0),
       cedears = get(1),
-      fx = get(2);
+      fx = get(2),
+      argentina = get(3);
     return {
       usa: usa ? normalizeQuotes(usa) : [],
+      argentina: argentina
+        ? normalizeQuotes(argentina).filter((q) =>
+            argentinaSeeds.some((a) => a.symbol === q.symbol),
+          )
+        : [],
       cedears: cedears ? normalizeQuotes(cedears) : [],
       ccl: Number.isFinite(fx?.venta) && fx.venta > 0 ? fx.venta : null,
       fetchedAt: new Date().toISOString(),
@@ -213,14 +236,17 @@ export function entityAsset(e: any): Asset | null {
     XNYS: "NYSE",
     XETR: "XETR",
     XLON: "LSE",
+    XBUE: "BCBA",
     XTKS: "TSE",
     XHKG: "HKEX",
     XPAR: "EURONEXT",
     XAMS: "EURONEXT",
   };
   const exchange = exchanges[e.exchange] || String(e.exchange || "OTROS");
-  const known = catalog.find(
-    (a) => a.symbol === e.symbol && a.country === country,
+  const known = [...catalog, ...argentinaSeeds].find(
+    (a) =>
+      (a.symbol === e.symbol || a.underlying === e.symbol) &&
+      a.country === country,
   );
   if (known) return known;
   return {
@@ -310,7 +336,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/health")
     return json({
       ok: true,
-      version: "0.1.0",
+      version: "0.2.0",
       news: !!env.MARKETAUX_API_KEY,
       ai: !!env.AI,
     });
@@ -335,8 +361,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
     const cedears = cedearCatalog(data.cedears, links);
     return json({
-      data: [...catalog, ...(cedears.length ? cedears : cedearSeeds)],
-      source: "Catálogo inicial + CEDEARs de Data912",
+      data: [
+        ...catalog,
+        ...argentinaSeeds,
+        ...(cedears.length ? cedears : cedearSeeds),
+      ],
+      source: "Acciones internacionales y argentinas + CEDEARs de Data912",
     });
   }
   if (path === "/api/search" && request.method === "GET") {
@@ -390,31 +420,97 @@ async function route(request: Request, env: Env): Promise<Response> {
       Energía: "Energy",
       Comunicación: "Communication Services",
     };
-    const key = `news:${symbols.join(",")}:${mode}:${sector}`;
-    const news = await cached(key, 1800, async () => {
-      const data = await marketaux(env, "news/all", {
-        ...(mode === "sector" && allowed[sector]
-          ? { industries: allowed[sector] }
-          : symbols.length
-            ? { symbols: symbols.join(",") }
-            : { entity_types: "equity" }),
-        filter_entities: "true",
-        group_similar: "true",
-        limit: "3",
-        language: "en,es",
+    const language = url.searchParams.get("language") || "en";
+    const country = url.searchParams.get("country") || "";
+    if (!["en", "es"].includes(language) || !["", "ar", "us"].includes(country))
+      throw new ApiError(400, "Idioma o mercado de noticias inválido.");
+    const page = Number(url.searchParams.get("page") || 1);
+    if (!Number.isInteger(page) || page < 1 || page > 100)
+      throw new ApiError(400, "Página de noticias inválida.");
+    const filters =
+      mode === "sector" && allowed[sector]
+        ? [{ industries: allowed[sector] }]
+        : symbols.length
+          ? symbols.map((symbol) => ({ symbols: symbol }))
+          : [{ entity_types: "equity" }];
+    const articles: Article[] = [];
+    const warnings: string[] = [];
+    let hasMore = false;
+    // Tres consultas simultáneas como máximo; cada empresa conserva su propia caché.
+    for (let i = 0; i < filters.length; i += 3) {
+      const results = await Promise.allSettled(
+        filters.slice(i, i + 3).map((filter) =>
+          cached(
+            `news:v3:${JSON.stringify(filter)}:${page}:${language}:${country}`,
+            1800,
+            async () => {
+              const result = await marketaux(env, "news/all", {
+                ...filter,
+                filter_entities: "true",
+                group_similar: "true",
+                limit: "3",
+                language,
+                ...(country ? { countries: country } : {}),
+                page: String(page),
+              } as Record<string, string>);
+              const data: Article[] = (result.data || [])
+                .map(sanitizeArticle)
+                .filter(Boolean);
+              await Promise.all(
+                data.map((article) =>
+                  cached(`article:${article.uuid}`, 86400, async () => article),
+                ),
+              );
+              return {
+                data,
+                hasMore:
+                  page < 100 &&
+                  result.meta?.found > page * (result.meta?.limit || 3),
+              };
+            },
+          ),
+        ),
+      );
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          articles.push(...result.value.data);
+          hasMore ||= result.value.hasMore;
+        } else {
+          warnings.push(
+            `${symbols[i + index] || "Noticias"}: ${result.reason instanceof ApiError ? result.reason.message : "No se pudo consultar la fuente."}`,
+          );
+        }
       });
-      const articles: Article[] = (data.data || [])
-        .map(sanitizeArticle)
-        .filter(Boolean);
-      const unique = [...new Map(articles.map((a) => [a.url, a])).values()];
-      for (const article of unique)
-        await cached(`article:${article.uuid}`, 86400, async () => article);
-      return {
-        data: unique,
-        fetchedAt: new Date().toISOString(),
-        source: "Marketaux",
-      };
-    });
+    }
+    const unique = new Map<string, Article>();
+    for (const article of articles) {
+      const previous = unique.get(article.url);
+      unique.set(
+        article.url,
+        previous
+          ? {
+              ...previous,
+              entities: [
+                ...new Map(
+                  [...previous.entities, ...article.entities].map((e) => [
+                    e.symbol,
+                    e,
+                  ]),
+                ).values(),
+              ],
+            }
+          : article,
+      );
+    }
+    const news = {
+      data: [...unique.values()].sort(
+        (a, b) => Date.parse(b.published_at) - Date.parse(a.published_at),
+      ),
+      fetchedAt: new Date().toISOString(),
+      source: "Marketaux",
+      hasMore,
+      warnings,
+    };
     return json(news);
   }
   if (path === "/api/analyze" && request.method === "POST") {

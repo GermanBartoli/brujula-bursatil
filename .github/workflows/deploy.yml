@@ -32,6 +32,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MARKETAUX_API_KEY: ${{ secrets.MARKETAUX_API_KEY }}
           MARKETAUX_API_KEY_BACKUP: ${{ secrets.MARKETAUX_API_KEY_BACKUP }}
+          MARKETAUX_API_KEY_THIRD: ${{ secrets.MARKETAUX_API_KEY_THIRD }}
       - name: Publicar en Cloudflare
         if: github.event_name != 'pull_request'
         uses: cloudflare/wrangler-action@v3

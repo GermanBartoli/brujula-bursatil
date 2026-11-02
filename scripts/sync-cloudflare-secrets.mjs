@@ -4,6 +4,7 @@ const names = [
   "CLOUDFLARE_ACCOUNT_ID",
   "MARKETAUX_API_KEY",
   "MARKETAUX_API_KEY_BACKUP",
+  "MARKETAUX_API_KEY_THIRD",
 ];
 for (const name of names)
   if (!process.env[name]) throw new Error(`Falta configurar ${name}.`);

@@ -46,7 +46,7 @@ La aplicación de desarrollo se abre en `http://127.0.0.1:5173`; Vite redirige `
 
 ## Secretos y despliegue
 
-Los secretos de GitHub Actions son `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `MARKETAUX_API_KEY` y `MARKETAUX_API_KEY_BACKUP`. Nunca se incluyen en el frontend ni en archivos versionados. Las claves de Marketaux también deben estar configuradas como secretos de producción del proyecto Pages. El flujo sincroniza los secretos de Marketaux antes de publicar. No ejecuta despliegues desde pull requests.
+Los secretos de GitHub Actions son `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `MARKETAUX_API_KEY`, `MARKETAUX_API_KEY_BACKUP` y `MARKETAUX_API_KEY_THIRD`. Nunca se incluyen en el frontend ni en archivos versionados. Las claves de Marketaux también deben estar configuradas como secretos de producción del proyecto Pages. El flujo sincroniza los secretos de Marketaux antes de publicar. No ejecuta despliegues desde pull requests.
 
 Se reutiliza el proyecto `brujula-bursatil`, con rama de producción `main` y binding de Workers AI `AI`. Se eligió Pages porque el token de la cuenta permite gestionar Pages, pero no el despliegue independiente de Workers. No hay una segunda integración Git de Cloudflare: GitHub Actions es la única automatización.
 
@@ -71,21 +71,25 @@ Las pruebas unitarias cubren conversión, cotización del CEDEAR frente a su sub
 
 | Fuente | Uso | Limitaciones |
 | --- | --- | --- |
-| [Marketaux](https://www.marketaux.com/documentation) | Entidades, noticias y sentimiento | La búsqueda abarca su cobertura, no garantiza todas las acciones del mundo. Se solicitan hasta tres noticias y quince símbolos por consulta. |
+| [Marketaux](https://www.marketaux.com/documentation) | Entidades, noticias y sentimiento | La búsqueda abarca su cobertura, no garantiza todas las acciones del mundo. Se solicitan hasta tres noticias por empresa y página, con hasta quince empresas por tanda. «Ver más noticias» acumula páginas y las tandas permiten recorrer listas más grandes. |
 | [TradingView](https://www.tradingview.com/widget-docs/) | Gráficos y calendario | Algunos instrumentos o bolsas no están disponibles en widgets; pueden existir demoras. |
-| [Data912](https://data912.apidocs.ar/) | Cotizaciones de EE. UU. y CEDEARs | Servicio educativo, no garantiza datos en tiempo real. Sin cobertura, se muestra el estado correspondiente. |
+| [Data912](https://data912.apidocs.ar/) | Cotizaciones de EE. UU., acciones argentinas y CEDEARs | Servicio educativo, no garantiza datos en tiempo real. Sin cobertura, se muestra el estado correspondiente. |
 | [DolarAPI](https://dolarapi.com/) | Referencia CCL | Tipo de cambio indicativo al momento de la consulta. |
 | [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) | Resumen y posible impacto | Analiza título y extracto, no el artículo completo. Puede cometer errores. |
+
+El catálogo argentino incluye las acciones locales en pesos identificadas en el [listado de TradingView](https://es.tradingview.com/markets/stocks-argentina/market-movers-all-stocks/) al 2 de noviembre de 2026, incluida TGNO4 (Transportadora de Gas del Norte). Se excluyen CEDEARs, fondos, especies en dólares y duplicados de liquidación inmediata. Los precios se actualizan desde Data912; un instrumento sin cotización se mantiene visible sin inventar un precio. Incluye también especies sin operaciones recientes identificadas por BYMA/IAMC. Las nuevas altas requieren actualizar el catálogo.
 
 El calendario integrado es económico; los balances se consultan mediante enlace a TradingView. No se inventan fechas de balances ni precios. Los CEDEARs se vinculan con las correspondencias de Data912 y una selección inicial verificada. Se incluyen únicamente las especies en pesos identificadas; las variantes D/C en dólares no se confunden con ARS. El símbolo de origen puede corregirse al editar una posición. No se aplican ratios de conversión de títulos.
 
 Las posiciones se valoran con el precio del instrumento y su moneda. Tanto el costo como el valor actual se convierten con el mismo CCL: el resultado no representa la ganancia histórica por tipo de cambio. Las posiciones sin precio o sin conversión quedan excluidas del total y se contabilizan como faltantes. No se calculan comisiones, dividendos, impuestos ni ajustes corporativos.
 
+Las noticias permiten elegir inglés (predeterminado) o español y filtrar entidades de Argentina, Estados Unidos o todo el mundo. «Todo el mercado» consulta cobertura general sin limitarla a la cartera. El país corresponde al mercado de la entidad, no al origen del medio. «Más noticias de [acción]» abre su listado individual; los filtros de idioma y país forman parte de la clave de caché.
+
 ## Privacidad y protección de cuotas
 
 La cartera, los costos y cantidades se guardan en `localStorage`; no se envían al servidor. Los símbolos consultados sí se envían a la API. Los widgets conectan el navegador con TradingView. Los respaldos contienen datos personales de cartera y no se sincronizan automáticamente entre dispositivos.
 
-La API utiliza caché compartida por centro de datos: cinco minutos para cotizaciones, treinta minutos para noticias y un día para búsquedas y análisis. La segunda clave se utiliza solo ante una respuesta de cuota agotada o límite de consultas, nunca para ocultar credenciales inválidas. Las claves y errores privados del proveedor no se devuelven al navegador.
+La API utiliza caché compartida por centro de datos: cinco minutos para cotizaciones, treinta minutos para noticias y un día para búsquedas y análisis. Se prioriza la clave de respaldo, luego la tercera y finalmente la original ante cuota agotada o límite de consultas; no se rotan credenciales inválidas. La caché de noticias es por empresa y página, reutilizable entre listas y selección individual. El navegador también conserva los resultados durante treinta minutos en la sesión; las consultas simultáneas idénticas se agrupan. Los fallos parciales se indican y no se guardan en esa caché. Las claves y errores privados del proveedor no se devuelven al navegador.
 
 El análisis acepta únicamente identificadores de noticias previamente consultadas y almacenadas; no permite enviar prompts arbitrarios ni descargar URLs indicadas por el cliente. Tiene límites por IP e instancia. En Pages estos contadores son aproximados y no constituyen una cuota global distribuida. Antes de abrir el servicio a un público amplio, agregar control de acceso, límites globales durables y monitoreo del consumo.
 

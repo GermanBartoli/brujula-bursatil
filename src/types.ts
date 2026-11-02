@@ -35,6 +35,7 @@ export type Quote = {
 export type Market = {
   usa: Quote[];
   cedears: Quote[];
+  argentina?: Quote[];
   ccl: number | null;
   fetchedAt: string;
   warnings: string[];
@@ -49,7 +50,13 @@ export type Article = {
   published_at: string;
   entities: { symbol: string; sentiment_score?: number }[];
 };
-export type News = { data: Article[]; fetchedAt: string; source: string };
+export type News = {
+  data: Article[];
+  fetchedAt: string;
+  source: string;
+  hasMore?: boolean;
+  warnings?: string[];
+};
 export type Analysis = {
   resumen: string;
   sentimiento: string;

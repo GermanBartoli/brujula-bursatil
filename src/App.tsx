@@ -1,3 +1,4 @@
+import { argentinaSeeds } from "./argentina";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -95,12 +96,49 @@ const time = (date: string) => {
         minute: "2-digit",
       });
 };
+const newsRequests = new Map<string, Promise<unknown>>();
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const r = await fetch("/api/" + path, options);
-  const data = (await r.json()) as T & { error?: string };
-  if (!r.ok) throw Error(data.error || "No pudimos conectar con el servicio.");
-  return data;
+  const cacheable = path.startsWith("news?") && !options;
+  const key = "brujula:noticias:v2:" + path;
+  if (cacheable) {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(key) || "null");
+      if (saved && saved.until > Date.now()) return saved.data;
+      if (saved) sessionStorage.removeItem(key);
+    } catch {
+      /* La consulta funciona también sin almacenamiento local. */
+    }
+    const pending = newsRequests.get(key);
+    if (pending) return pending as Promise<T>;
+  }
+  const task = (async () => {
+    const r = await fetch("/api/" + path, options);
+    const data = (await r.json()) as T & {
+      error?: string;
+      warnings?: string[];
+    };
+    if (!r.ok)
+      throw Error(data.error || "No pudimos conectar con el servicio.");
+    if (cacheable && !data.warnings?.length) {
+      try {
+        sessionStorage.setItem(
+          key,
+          JSON.stringify({ until: Date.now() + 1800000, data }),
+        );
+      } catch {
+        /* Una cuota local agotada no impide mostrar noticias. */
+      }
+    }
+    return data;
+  })();
+  if (cacheable) newsRequests.set(key, task);
+  try {
+    return await task;
+  } finally {
+    if (cacheable) newsRequests.delete(key);
+  }
 }
+
 function load() {
   try {
     const saved = localStorage.getItem(storageKey);
@@ -184,10 +222,12 @@ function NewsCard({
   article,
   symbol,
   onNotice,
+  onMore,
 }: {
   article: Article;
   symbol: string;
   onNotice: (s: string) => void;
+  onMore: () => void;
 }) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null),
     [busy, setBusy] = useState(false);
@@ -248,6 +288,9 @@ function NewsCard({
           {analysis ? "Volver a analizar" : "Analizar con IA"}
         </button>
       </div>
+      <button className="text-btn" disabled={!symbol} onClick={onMore}>
+        Más noticias de {symbol.replace(/\.BA$/, "")} <ArrowUpRight size={16} />
+      </button>
       {analysis && (
         <div className="analysis">
           <span className="eyebrow">
@@ -276,7 +319,11 @@ export default function App() {
     [notice, setNotice] = useState("");
   const [market, setMarket] = useState<Market | null>(null),
     [marketError, setMarketError] = useState("");
-  const [assets, setAssets] = useState<Asset[]>([...catalog, ...cedearSeeds]);
+  const [assets, setAssets] = useState<Asset[]>([
+    ...catalog,
+    ...argentinaSeeds,
+    ...cedearSeeds,
+  ]);
   const [selected, setSelected] = useState<Asset>(
     initial.data.watchlist[0] || catalog[0],
   );
@@ -294,8 +341,12 @@ export default function App() {
   const [news, setNews] = useState<News | null>(null),
     [newsBusy, setNewsBusy] = useState(false),
     [newsError, setNewsError] = useState(""),
+    [newsLanguage, setNewsLanguage] = useState("en"),
+    [newsCountry, setNewsCountry] = useState(""),
     [newsMode, setNewsMode] = useState("direct"),
     [newsScope, setNewsScope] = useState("lista"),
+    [newsPage, setNewsPage] = useState(1),
+    [newsBatch, setNewsBatch] = useState(0),
     [reload, setReload] = useState(0);
   const [editing, setEditing] = useState<Asset | null>(null),
     [confirmImport, setConfirmImport] = useState<LocalData | null>(null),
@@ -368,32 +419,76 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [query, searchPage, country]);
-  const symbols = useMemo(
+  const followed = [
+    ...new Map(
+      [...data.watchlist, ...data.positions.map((p) => p.asset), selected].map(
+        (a) => [a.id, a],
+      ),
+    ).values(),
+  ];
+  const newsAsset = followed.find((a) => a.id === newsScope) || selected;
+  const allSymbols = useMemo(
     () =>
       [
         ...new Set(
-          (newsScope === "seleccion"
-            ? [selected]
-            : [...data.watchlist, ...data.positions.map((p) => p.asset)]
+          (newsScope === "mercado"
+            ? []
+            : newsScope !== "lista"
+              ? [newsAsset]
+              : [...data.watchlist, ...data.positions.map((p) => p.asset)]
           )
             .map((a) => a.underlying)
             .filter(Boolean),
         ),
       ]
-        .slice(0, 15)
         .sort()
         .join(","),
-    [data.watchlist, data.positions, selected, newsScope],
+    [data.watchlist, data.positions, newsAsset, newsScope],
   );
+  const symbols = allSymbols
+    .split(",")
+    .filter(Boolean)
+    .slice(newsBatch * 15, (newsBatch + 1) * 15)
+    .join(",");
+  const newsSector = newsMode === "sector" ? newsAsset.sector : "";
+  const previousNewsFilter = useRef("");
   useEffect(() => {
+    const filter = JSON.stringify([
+      allSymbols,
+      newsMode,
+      newsSector,
+      newsLanguage,
+      newsCountry,
+    ]);
+    if (previousNewsFilter.current !== filter) {
+      previousNewsFilter.current = filter;
+      if (newsPage !== 1 || newsBatch !== 0) {
+        setNewsPage(1);
+        setNewsBatch(0);
+        return;
+      }
+    }
     let canceled = false;
     setNewsBusy(true);
     setNewsError("");
-    api<News>(
-      `news?symbols=${encodeURIComponent(symbols)}&mode=${newsMode}&sector=${encodeURIComponent(selected.sector)}`,
+    Promise.all(
+      Array.from({ length: newsPage }, (_, i) =>
+        api<News>(
+          `news?symbols=${encodeURIComponent(symbols)}&mode=${newsMode}&sector=${encodeURIComponent(newsSector)}&page=${i + 1}&language=${newsLanguage}&country=${newsCountry}`,
+        ),
+      ),
     )
       .then((r) => {
-        if (!canceled) setNews(r);
+        if (!canceled)
+          setNews({
+            ...r[r.length - 1],
+            data: [
+              ...new Map(
+                r.flatMap((n) => n.data).map((a) => [a.url, a]),
+              ).values(),
+            ],
+            warnings: [...new Set(r.flatMap((n) => n.warnings || []))],
+          });
       })
       .catch((e) => {
         if (!canceled) {
@@ -407,7 +502,17 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [symbols, newsMode, selected.sector, reload]);
+  }, [
+    allSymbols,
+    symbols,
+    newsBatch,
+    newsMode,
+    newsSector,
+    newsPage,
+    newsLanguage,
+    newsCountry,
+    reload,
+  ]);
   const balance = totals(data.positions, market, data.currency),
     selectedQuote = quoteFor(selected, market);
   const visibleWatchlist = data.watchlist.filter(
@@ -449,7 +554,6 @@ export default function App() {
   function choose(a: Asset) {
     setSelected(a);
     setSearchOpen(false);
-    setNewsScope("seleccion");
     go("inicio");
   }
   function exportData() {
@@ -474,6 +578,28 @@ export default function App() {
     }
     if (uploadRef.current) uploadRef.current.value = "";
   }
+  function assetForNews(article: Article): Asset | null {
+    if (newsScope !== "lista" && newsScope !== "mercado") return newsAsset;
+    const known = [...followed, ...assets].find((asset) =>
+      article.entities.some((e) => e.symbol === asset.underlying),
+    );
+    if (known) return known;
+    const symbol = article.entities[0]?.symbol;
+    return symbol
+      ? {
+          id: `NOTICIAS:${symbol}`,
+          symbol,
+          name: symbol,
+          exchange: "OTROS",
+          country: "",
+          currency: "XXX",
+          kind: "accion",
+          sector: "Otros",
+          underlying: symbol,
+          tv: symbol,
+        }
+      : null;
+  }
   const newsSection = (
     <section className="panel news-panel">
       <div className="section-head">
@@ -495,9 +621,12 @@ export default function App() {
           onChange={(e) => setNewsScope(e.target.value)}
         >
           <option value="lista">Mi seguimiento</option>
-          <option value="seleccion">
-            {selected.symbol} · instrumento elegido
-          </option>
+          <option value="mercado">Todo el mercado</option>
+          {followed.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.symbol} · {a.name}
+            </option>
+          ))}
         </select>
         <select
           aria-label="Tipo de noticias"
@@ -507,7 +636,26 @@ export default function App() {
           <option value="direct">Menciones directas</option>
           <option value="sector">Contexto del sector</option>
         </select>
-        <span className="muted">Marketaux · hasta 3 noticias por consulta</span>
+        <select
+          aria-label="Idioma de las noticias"
+          value={newsLanguage}
+          onChange={(e) => setNewsLanguage(e.target.value)}
+        >
+          <option value="en">Inglés</option>
+          <option value="es">Español</option>
+        </select>
+        <select
+          aria-label="Mercado de las noticias"
+          value={newsCountry}
+          onChange={(e) => setNewsCountry(e.target.value)}
+        >
+          <option value="">Todo el mundo</option>
+          <option value="ar">Argentina</option>
+          <option value="us">EE. UU.</option>
+        </select>
+        <span className="muted">
+          Marketaux · hasta 3 noticias por empresa y página · caché de 30 min
+        </span>
       </div>
       {newsBusy ? (
         <div className="loading">
@@ -533,16 +681,16 @@ export default function App() {
             <NewsCard
               key={a.uuid}
               article={a}
-              symbol={
-                newsScope === "seleccion"
-                  ? selected.underlying || selected.symbol
-                  : a.entities.find((e) =>
-                      symbols.split(",").includes(e.symbol),
-                    )?.symbol ||
-                    symbols.split(",")[0] ||
-                    selected.symbol
-              }
+              symbol={assetForNews(a)?.underlying || ""}
               onNotice={setNotice}
+              onMore={() => {
+                const asset = assetForNews(a);
+                if (!asset) return;
+                setSelected(asset);
+                setNewsScope(asset.id);
+                setNewsPage(1);
+                go("noticias");
+              }}
             />
           ))}
         </div>
@@ -552,6 +700,53 @@ export default function App() {
           text="Probá con otra acción o mirá el contexto de su sector."
         />
       )}
+      {news?.warnings?.map((w) => (
+        <p className="inline-error" key={w}>
+          {w}
+        </p>
+      ))}
+      <div className="button-row">
+        {news?.hasMore && (
+          <button
+            className="secondary"
+            disabled={newsBusy}
+            onClick={() => setNewsPage((p) => p + 1)}
+          >
+            Ver más noticias
+          </button>
+        )}
+        {allSymbols.split(",").length > 15 && (
+          <>
+            <span>
+              Instrumentos {newsBatch * 15 + 1}–
+              {Math.min((newsBatch + 1) * 15, allSymbols.split(",").length)} de{" "}
+              {allSymbols.split(",").length}
+            </span>
+            {newsBatch > 0 && (
+              <button
+                className="secondary"
+                onClick={() => {
+                  setNewsBatch((b) => b - 1);
+                  setNewsPage(1);
+                }}
+              >
+                Instrumentos anteriores
+              </button>
+            )}
+            {(newsBatch + 1) * 15 < allSymbols.split(",").length && (
+              <button
+                className="secondary"
+                onClick={() => {
+                  setNewsBatch((b) => b + 1);
+                  setNewsPage(1);
+                }}
+              >
+                Siguientes instrumentos
+              </button>
+            )}
+          </>
+        )}
+      </div>
       {newsMode === "sector" && (
         <p className="footnote">
           El contexto del sector puede incluir empresas no presentes en tu
@@ -1035,7 +1230,7 @@ export default function App() {
                             key={a.id}
                             onClick={() => {
                               setSelected(a);
-                              setNewsScope("seleccion");
+                              setNewsScope(a.id);
                             }}
                           >
                             <Badge asset={a} />
@@ -1614,14 +1809,15 @@ export default function App() {
               />
             </div>
             <p className="muted">
-              Acciones internacionales y CEDEARs · buscá por nombre o símbolo
+              Acciones argentinas, internacionales y CEDEARs · buscá por nombre
+              o símbolo
             </p>
             {searchBusy && (
               <p className="muted">Buscando en mercados mundiales…</p>
             )}
             {searchError && <p className="inline-error">{searchError}</p>}
             <div className="search-results">
-              {shownAssets.slice(0, 60).map((a) => (
+              {shownAssets.map((a) => (
                 <div className="search-result" key={a.id}>
                   <button className="asset-cell" onClick={() => choose(a)}>
                     <Badge asset={a} />

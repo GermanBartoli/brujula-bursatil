@@ -99,9 +99,11 @@ export function quoteFor(
   return (
     asset.kind === "cedear"
       ? market?.cedears
-      : asset.country === "us"
-        ? market?.usa
-        : []
+      : asset.country === "ar" && asset.currency === "ARS"
+        ? market?.argentina
+        : asset.country === "us"
+          ? market?.usa
+          : []
   )?.find((q) => q.symbol === asset.symbol);
 }
 export function convert(
