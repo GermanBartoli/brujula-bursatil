@@ -6,7 +6,14 @@ import {
 } from "./instruments.ts";
 import { countries } from "../src/catalog.ts";
 import { argentinaSeeds } from "../src/argentina.ts";
-import { catalog, cedearSeeds, newsSymbol } from "../src/catalog.ts";
+import {
+  catalog,
+  cedearSeeds,
+  newsSymbol,
+  parseListingQuery,
+  matchesSearch,
+  searchText,
+} from "../src/catalog.ts";
 import type { Analysis, Article, Asset, Quote } from "../src/types";
 type Limiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 export interface Env {
@@ -252,6 +259,7 @@ export function entityAsset(e: any): Asset | null {
     XNAS: "NASDAQ",
     XNYS: "NYSE",
     XETR: "XETR",
+    XFRA: "FWB",
     XLON: "LSE",
     XBUE: "BCBA",
     XTKS: "TSE",
@@ -386,7 +394,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/health")
     return json({
       ok: true,
-      version: "0.4.0",
+      version: "0.4.1",
       news: !!env.MARKETAUX_API_KEY,
       ai: !!env.AI,
     });
@@ -545,7 +553,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     const page = Number(url.searchParams.get("page") || 1);
     if (
       q.length < 2 ||
-      q.length > 60 ||
+      q.length > 180 ||
       !Number.isInteger(page) ||
       page < 1 ||
       page > 100
@@ -557,12 +565,65 @@ async function route(request: Request, env: Env): Promise<Response> {
     const country = url.searchParams.get("country") || "";
     if (country && !/^[a-z]{2}$/.test(country))
       throw new ApiError(400, "País inválido.");
+    const listing = parseListingQuery(q);
+    if (listing) {
+      if (page !== 1 || (country && country !== listing.country))
+        return json({ data: [], hasMore: false });
+      const known = catalog.find((a) => matchesSearch(a, q));
+      if (known) return json({ data: [known], hasMore: false });
+      // Solo se crea una cotización después de confirmar el símbolo y la moneda en la fuente.
+      const asset = await cached(
+        `listing:v1:${listing.exchange}:${listing.country}:${listing.symbol}`,
+        86400,
+        async () => {
+          const ticker = listing.symbol + listing.suffix;
+          const raw = await fetchJson(
+            "https://query1.finance.yahoo.com/v8/finance/chart/" +
+              encodeURIComponent(ticker) +
+              "?interval=1d&range=5d",
+          );
+          const quote = normalizeGlobal(raw, ticker);
+          const meta = raw?.chart?.result?.[0]?.meta;
+          if (
+            !quote ||
+            !["EQUITY", "ETF"].includes(meta?.instrumentType) ||
+            !/^[A-Z]{3}$/.test(quote.currency)
+          )
+            throw new ApiError(
+              404,
+              "No se encontró una acción o ETF verificable en esa bolsa. Revisá el código.",
+            );
+          const symbol =
+            listing.exchange === "EURONEXT" ? ticker : listing.symbol;
+          return {
+            id: `${listing.exchange}:${symbol}`,
+            symbol,
+            name: String(
+              meta.longName || meta.shortName || listing.symbol,
+            ).slice(0, 180),
+            exchange: listing.exchange,
+            country: listing.country,
+            currency: quote.currency,
+            kind: meta.instrumentType === "ETF" ? "etf" : "accion",
+            sector: "Otros",
+            underlying: ticker,
+            tv: `${listing.exchange}:${listing.symbol}`,
+          } satisfies Asset;
+        },
+      );
+      return json({ data: [asset], hasMore: false });
+    }
+    if (q.includes(":"))
+      throw new ApiError(
+        400,
+        "Código de bolsa no reconocido. Usá ETR:NVD, FRA:NVD, AMS:VHYL o NASDAQ:NVDA.",
+      );
     const data = await cached(
-      `search:${q.toLowerCase()}:${page}:${country}`,
+      `search:v2:${searchText(q)}:${page}:${country}`,
       86400,
       () =>
         marketaux(env, "entity/search", {
-          search: q,
+          search: searchText(q),
           page: String(page),
           types: "equity,etf",
           ...(country

@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { catalog, newsSymbol, searchText } from "../src/catalog.ts";
+import {
+  catalog,
+  newsSymbol,
+  searchText,
+  matchesSearch,
+  parseListingQuery,
+} from "../src/catalog.ts";
 import {
   convert,
   emptyData,
@@ -37,6 +43,89 @@ const market: Market = {
     },
   },
 };
+
+test("Los códigos de NVIDIA distinguen Xetra, Frankfurt y Nasdaq", () => {
+  for (const query of [
+    "ETR:NVD",
+    "XETR:NVD",
+    "XETRA:NVD",
+    "NVD:ETR",
+    "nvd.de",
+    '=GOOGLEFINANCE("ETR:NVD"; "price")',
+  ]) {
+    assert.equal(searchText(query), "xetr:nvd");
+    const found = catalog.filter((a) => matchesSearch(a, query));
+    assert.equal(found.length, 1);
+    assert.equal(found[0].id, "XETR:NVD");
+    assert.equal(found[0].currency, "EUR");
+  }
+  for (const query of ["FRA:NVD", "FWB:NVD", "XFRA:NVD", "NVD.F"])
+    assert.equal(catalog.find((a) => matchesSearch(a, query))?.id, "FWB:NVD");
+  assert.equal(
+    catalog.find((a) => matchesSearch(a, "NASDAQ:NVDA"))?.currency,
+    "USD",
+  );
+  assert.equal(newsSymbol(catalog.find((a) => a.id === "FWB:NVD")!), "NVD.F");
+  assert.equal(providerSymbol("XETR:NVD"), "NVD.DE");
+  assert.equal(providerSymbol("FWB:NVD"), "NVD.F");
+  assert.equal(parseListingQuery("ETR:../secret"), null);
+  assert.equal(parseListingQuery("MERCADO:NVD"), null);
+});
+
+test("La búsqueda por bolsa resuelve acciones fuera del catálogo sin recurrir al ticker USD", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  const env = { ASSETS: { fetch: async () => new Response() } };
+  globalThis.fetch = async (input) => {
+    calls.push(String(input));
+    return Response.json({
+      chart: {
+        result: [
+          {
+            meta: {
+              symbol: "SIE.DE",
+              longName: "Siemens",
+              instrumentType: "EQUITY",
+              currency: "EUR",
+              regularMarketPrice: 270,
+              regularMarketTime: 1793637306,
+            },
+          },
+        ],
+      },
+    });
+  };
+  try {
+    const known = await worker.fetch(
+      new Request("https://test/api/search?q=ETR%3ANVD"),
+      env,
+    );
+    assert.equal(known.status, 200);
+    assert.equal(((await known.json()) as any).data[0].id, "XETR:NVD");
+    assert.equal(calls.length, 0);
+    const response = await worker.fetch(
+      new Request("https://test/api/search?q=ETR%3ASIE"),
+      env,
+    );
+    assert.equal(response.status, 200);
+    const asset = ((await response.json()) as any).data[0];
+    assert.equal(asset.id, "XETR:SIE");
+    assert.equal(asset.currency, "EUR");
+    assert.ok(calls[0].includes("/SIE.DE?"));
+    const invalid = await worker.fetch(
+      new Request("https://test/api/search?q=ETR%3AINEXISTENTE"),
+      env,
+    );
+    assert.equal(invalid.status, 404);
+    const conflict = await worker.fetch(
+      new Request("https://test/api/search?q=ETR%3ANVD&country=us"),
+      env,
+    );
+    assert.deepEqual(((await conflict.json()) as any).data, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("Convierte EUR, GBP, CNY y ARS vía USD sin sumar monedas originales", () => {
   assert.equal(convert(80, "EUR", "GBP", 1000, market.fx), 50);

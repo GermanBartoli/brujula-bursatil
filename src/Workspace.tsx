@@ -96,7 +96,7 @@ export function Research({
             "Estados financieros",
           )}
           {link(
-            `https://www.google.com/finance/quote/${encodeURIComponent(asset.symbol + ":" + (asset.country === "nl" ? "AMS" : asset.exchange))}`,
+            `https://www.google.com/finance/quote/${encodeURIComponent(asset.symbol + ":" + (asset.exchange === "XETR" ? "ETR" : asset.exchange === "FWB" ? "FRA" : asset.country === "nl" ? "AMS" : asset.exchange))}`,
             "Google Finance",
           )}
         </div>

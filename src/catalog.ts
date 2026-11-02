@@ -90,6 +90,8 @@ catalog.push(
       ["SPY", "SPDR S&P 500 ETF", "AMEX", "us", "USD", "etf"],
       ["QQQ", "Invesco QQQ Trust", "NASDAQ", "us", "USD", "etf"],
       ["IBKR", "Interactive Brokers Group", "NASDAQ", "us", "USD", "accion"],
+      ["NVD", "NVIDIA · Xetra", "XETR", "de", "EUR", "accion"],
+      ["NVD", "NVIDIA · Frankfurt", "FWB", "de", "EUR", "accion"],
       ["ASML", "ASML Holding · ADR", "NASDAQ", "us", "USD", "accion"],
       ["BABA", "Alibaba · ADR", "NYSE", "us", "USD", "accion"],
       ["9988", "Alibaba · Hong Kong", "HKEX", "hk", "HKD", "accion"],
@@ -140,13 +142,113 @@ export function matchesCountry(country: string, filter: string) {
     (filter === "asia" ? asianCountries.includes(country) : country === filter)
   );
 }
-export function searchText(query: string) {
+const listingMarkets = [
+  {
+    exchange: "XETR",
+    country: "de",
+    suffix: ".DE",
+    aliases: ["ETR", "XETR", "XETRA"],
+  },
+  {
+    exchange: "FWB",
+    country: "de",
+    suffix: ".F",
+    aliases: ["FRA", "FWB", "XFRA"],
+  },
+  {
+    exchange: "EURONEXT",
+    country: "nl",
+    suffix: ".AS",
+    aliases: ["AMS", "XAMS", "EURONEXT"],
+  },
+  {
+    exchange: "EURONEXT",
+    country: "fr",
+    suffix: ".PA",
+    aliases: ["EPA", "XPAR"],
+  },
+  {
+    exchange: "LSE",
+    country: "gb",
+    suffix: ".L",
+    aliases: ["LON", "LSE", "XLON"],
+  },
+  {
+    exchange: "NASDAQ",
+    country: "us",
+    suffix: "",
+    aliases: ["NASDAQ", "XNAS"],
+  },
+  { exchange: "NYSE", country: "us", suffix: "", aliases: ["NYSE", "XNYS"] },
+  {
+    exchange: "HKEX",
+    country: "hk",
+    suffix: ".HK",
+    aliases: ["HKG", "HKEX", "XHKG"],
+  },
+  {
+    exchange: "TSE",
+    country: "jp",
+    suffix: ".T",
+    aliases: ["TYO", "TSE", "XTKS"],
+  },
+];
+function queryCode(query: string) {
   return query
     .trim()
-    .replace(/^=GOOGLEFINANCE\(["']([^"']+)["'].*$/i, "$1")
-    .replace(/^AMS:/i, "EURONEXT:")
-    .replace(/^FRA:/i, "FWB:")
-    .toLowerCase();
+    .replace(/^=GOOGLEFINANCE\(\s*["']([^"']+)["'].*$/i, "$1")
+    .trim()
+    .toUpperCase();
+}
+export function parseListingQuery(query: string) {
+  const code = queryCode(query);
+  const parts = code.split(":");
+  let market = listingMarkets.find((m) => m.aliases.includes(parts[0]));
+  let symbol = parts[1];
+  if (parts.length === 2 && !market) {
+    market = listingMarkets.find((m) => m.aliases.includes(parts[1]));
+    symbol = parts[0];
+  }
+  if (parts.length === 1) {
+    market = listingMarkets.find((m) => m.suffix && code.endsWith(m.suffix));
+    symbol = market ? code.slice(0, -market.suffix.length) : "";
+  }
+  if (
+    parts.length > 2 ||
+    !market ||
+    !symbol ||
+    !/^[A-Z0-9_^.-]{1,24}$/.test(symbol)
+  )
+    return null;
+  if (market.suffix && symbol.endsWith(market.suffix))
+    symbol = symbol.slice(0, -market.suffix.length);
+  if (!symbol) return null;
+  return {
+    exchange: market.exchange,
+    country: market.country,
+    suffix: market.suffix,
+    symbol,
+  };
+}
+export function searchText(query: string) {
+  const listing = parseListingQuery(query);
+  return listing
+    ? `${listing.exchange}:${listing.symbol}`.toLowerCase()
+    : queryCode(query).toLowerCase();
+}
+export function matchesSearch(asset: Asset, query: string) {
+  const listing = parseListingQuery(query);
+  if (listing)
+    return (
+      asset.exchange === listing.exchange &&
+      asset.country === listing.country &&
+      [listing.symbol, listing.symbol + listing.suffix].includes(
+        asset.symbol.toUpperCase(),
+      )
+    );
+  return `${asset.name} ${asset.symbol} ${asset.exchange} ${asset.id}`
+    .toLowerCase()
+    .includes(searchText(query));
 }
 export function newsSymbol(asset: Asset): string {
   if (
@@ -168,11 +270,13 @@ export function newsSymbol(asset: Asset): string {
     au: ".AX",
   };
   const ending =
-    asset.exchange === "SSE"
-      ? ".SS"
-      : asset.exchange === "SZSE"
-        ? ".SZ"
-        : suffix[asset.country];
+    asset.exchange === "FWB"
+      ? ".F"
+      : asset.exchange === "SSE"
+        ? ".SS"
+        : asset.exchange === "SZSE"
+          ? ".SZ"
+          : suffix[asset.country];
   return asset.underlying + (ending || "");
 }
 export const cedearSeeds: Asset[] = catalog

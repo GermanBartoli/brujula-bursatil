@@ -1,6 +1,11 @@
 import { Research, RiskPanel, MacroPanel, Resources } from "./Workspace";
 import { currencies, positionValue } from "./portfolio";
-import { countries, matchesCountry, searchText, newsSymbol } from "./catalog";
+import {
+  countries,
+  matchesCountry,
+  matchesSearch,
+  newsSymbol,
+} from "./catalog";
 import {
   loadPreferences,
   preferencesKey,
@@ -453,7 +458,7 @@ export default function App() {
     setSearchBusy(true);
     const timer = setTimeout(() => {
       api<{ data: Asset[]; hasMore: boolean }>(
-        `search?q=${encodeURIComponent(searchText(query).split(":").at(-1) || "")}&page=${searchPage}${country === "todos" || country === "asia" ? "" : "&country=" + country}`,
+        `search?q=${encodeURIComponent(query.trim())}&page=${searchPage}${country === "todos" || country === "asia" ? "" : "&country=" + country}`,
       )
         .then((r) => {
           if (!canceled) {
@@ -636,10 +641,7 @@ export default function App() {
         ...new Map([...assets, ...remote].map((a) => [a.id, a])).values(),
       ].filter(
         (a) =>
-          (!query ||
-            `${a.name} ${a.symbol} ${a.exchange} ${a.id}`
-              .toLowerCase()
-              .includes(searchText(query))) &&
+          matchesSearch(a, query) &&
           (kind === "todos" || a.kind === kind) &&
           matchesCountry(a.country, country) &&
           (exchange === "todos" || a.exchange === exchange) &&
@@ -2054,7 +2056,7 @@ export default function App() {
               <section className="panel settings-panel">
                 <Compass size={27} />
                 <h2>Hecho para crecer con vos</h2>
-                <p>Brújula Bursátil · v0.4.0</p>
+                <p>Brújula Bursátil · v0.4.1</p>
                 <p>
                   Un proyecto personal de German Bartoli, con la colaboración de
                   Codex. Código abierto, datos personales locales.
@@ -2130,7 +2132,7 @@ export default function App() {
               <input
                 autoFocus
                 aria-label="Buscar instrumento"
-                placeholder="Probá NVIDIA, AAPL, Toyota…"
+                placeholder="NVIDIA, ETR:NVD, FRA:NVD, NVD.DE…"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -2143,8 +2145,9 @@ export default function App() {
               />
             </div>
             <p className="muted">
-              Acciones argentinas, internacionales y CEDEARs · buscá por nombre
-              o símbolo
+              Buscá por nombre, bolsa:ticker o sufijo. Ej.: ETR:NVD / NVD.DE
+              (Xetra, EUR), FRA:NVD / NVD.F (Frankfurt, EUR), NASDAQ:NVDA (EE.
+              UU., USD), AMS:VHYL. También admite fórmulas GOOGLEFINANCE.
             </p>
             {searchBusy && (
               <p className="muted">Buscando en mercados mundiales…</p>

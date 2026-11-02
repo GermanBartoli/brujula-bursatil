@@ -118,6 +118,12 @@ Los modales se cierran con la cruz, Escape o un clic que comience y termine fuer
 
 ## Mercados, multimoneda y análisis · v0.4.0
 
+### Corrección del buscador · v0.4.1
+
+El buscador conserva la bolsa al consultar. NVIDIA alemana se encuentra como `ETR:NVD`, `XETR:NVD`, `XETRA:NVD`, `NVD:ETR` o `NVD.DE` para Xetra, y `FRA:NVD`, `FWB:NVD`, `XFRA:NVD` o `NVD.F` para Frankfurt, ambas en EUR. `NASDAQ:NVDA` sigue siendo otra cotización, en USD. Se aceptan también fórmulas GOOGLEFINANCE con estos códigos.
+
+También reconoce prefijos de Ámsterdam, París, Londres, Nasdaq, NYSE, Hong Kong y Tokio y sus sufijos admitidos. Las búsquedas explícitas fuera del catálogo verifican símbolo, tipo y moneda con la fuente de precios; no sustituyen silenciosamente la bolsa por EE. UU. Si el proveedor no reconoce el código, se informa el error. Las posiciones existentes no se migran automáticamente.
+
 La navegación agrupa Seguimiento, Mi portfolio y Contexto y herramientas. El buscador reconoce `AMS:VHYL`, `IBKR` y las fórmulas `=GOOGLEFINANCE("AMS:VHYL"; "price")` / `=GOOGLEFINANCE("IBKR"; "price")` como búsquedas; no ejecuta fórmulas. Ámsterdam y Londres conservan posiciones independientes para VHYL. Las noticias utilizan símbolos con sufijo de mercado para distinguir estas cotizaciones. Los filtros de país representan la plaza de cotización, no toda la exposición económica.
 
 ### Monedas y precios

@@ -63,6 +63,54 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("Encuentra y registra NVIDIA alemana en EUR usando códigos de mercado", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Agregar acción", exact: true })
+    .click();
+  for (const code of [
+    "ETR:NVD",
+    "NVD.DE",
+    "XETRA:NVD",
+    "NVD:ETR",
+    "FRA:NVD",
+    "NVD.F",
+  ]) {
+    await page.getByLabel("Buscar instrumento").fill(code);
+    await expect(page.locator(".search-result")).toHaveCount(1);
+    await expect(page.locator(".search-result")).toContainText("EUR");
+    await expect(page.locator(".search-result")).toContainText(
+      code.includes("FRA") || code.endsWith(".F") ? "Frankfurt" : "Xetra",
+    );
+  }
+  await page
+    .getByLabel("Buscar instrumento")
+    .fill('=GOOGLEFINANCE("ETR:NVD"; "price")');
+  const requested = page.waitForRequest(
+    (r) =>
+      r.url().includes("/api/search?") &&
+      new URL(r.url()).searchParams.get("q")?.includes("ETR:NVD") === true,
+  );
+  await requested;
+  await page.getByRole("button", { name: "Registrar", exact: true }).click();
+  await expect(
+    page.getByLabel("Moneda de cotización"),
+  ).toHaveValue("EUR");
+  await expect(page.getByLabel("Moneda del precio de compra")).toHaveValue(
+    "EUR",
+  );
+  await page.getByLabel("Cantidad de títulos").fill("2");
+  await page.getByLabel(/Precio promedio/).fill("180");
+  await page.getByRole("button", { name: "Guardar posición" }).click();
+  await page.reload();
+  const position = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("brujula-bursatil:v1")!).positions[0],
+  );
+  expect(position.asset.id).toBe("XETR:NVD");
+  expect(position.asset.currency).toBe("EUR");
+});
+
 test("Busca AMS:VHYL, registra en otra moneda, convierte y clasifica el riesgo", async ({
   page,
 }) => {
