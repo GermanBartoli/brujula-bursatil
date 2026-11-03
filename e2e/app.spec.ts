@@ -124,3 +124,31 @@ test("Importa un respaldo con confirmación y conserva los datos ante un archivo
     ),
   ).toBe(1);
 });
+
+test("Las secciones conservan su URL al recargar y al navegar atrás y adelante", async ({ page }) => {
+  await page.goto("/analisis");
+  await expect(page.getByRole("button", { name: "Buscar otro ticker" })).toBeVisible();
+  if (await page.getByRole("button", { name: "Abrir menú" }).isVisible())
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+  await page.getByRole("button", { name: "Mi cartera", exact: true }).click();
+  await expect(page).toHaveURL(/\/cartera$/);
+  await page.reload();
+  await expect(page).toHaveURL(/\/cartera$/);
+  await page.goBack();
+  await expect(page.getByRole("button", { name: "Buscar otro ticker" })).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL(/\/cartera$/);
+});
+
+test("Permite analizar otro ticker sin registrar una posición", async ({ page }) => {
+  await page.goto("/analisis");
+  await page.getByRole("button", { name: "Buscar otro ticker" }).click();
+  await page.getByRole("textbox", { name: "Buscar instrumento" }).fill("AAPL");
+  await page.locator(".search-result").filter({ hasText: "Apple" }).first().getByRole("button", { name: "Analizar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Apple · AAPL", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/analisis$/);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("brujula-bursatil:v1")!).positions)).toHaveLength(0);
+  await expect.poll(() => page.locator('.widget-financials script').textContent()).toContain('NASDAQ:AAPL');
+  await expect.poll(() => page.locator('.widget-technical script').textContent()).toContain('NASDAQ:AAPL');
+});

@@ -204,8 +204,8 @@ select {
   padding: 10px 12px;
   min-width: 0;
 }
-input:focus,
-select:focus {
+input:focus-visible,
+select:focus-visible {
   outline: 2px solid #a2c584;
   outline-offset: 2px;
 }
@@ -582,10 +582,9 @@ main {
 }
 .currency-switch {
   display: flex;
-  border: 1px solid var(--line);
-  background: var(--surface-low, #111b14);
+  border: 0;
   border-radius: 7px;
-  padding: 3px;
+  padding: 0;
 }
 .currency-switch button {
   padding: 6px 9px;

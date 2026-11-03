@@ -73,6 +73,15 @@ type Page =
   | "analisis"
   | "riesgo"
   | "recursos";
+const pagePaths: Record<Page, string> = {
+  inicio: "/", mercados: "/mercados", noticias: "/noticias",
+  cartera: "/cartera", calendario: "/calendario", ajustes: "/ajustes",
+  analisis: "/analisis", riesgo: "/riesgo", recursos: "/recursos",
+};
+function pageFromUrl(): Page {
+  const path = window.location.pathname.replace(/\/$/, "") || "/";
+  return (Object.keys(pagePaths) as Page[]).find((p) => pagePaths[p] === path) || "inicio";
+}
 const navigation = [
   { id: "inicio", label: "Mi panorama", icon: LayoutDashboard },
   { id: "mercados", label: "Explorar mercados", icon: Globe2 },
@@ -372,7 +381,7 @@ export default function App() {
   const [data, setData] = useState<LocalData>(initial.data),
     [storageError, setStorageError] = useState(initial.error);
   const previousVisit = useRef(initial.data.lastVisit);
-  const [page, setPage] = useState<Page>("inicio"),
+  const [page, setPage] = useState<Page>(pageFromUrl),
     [mobile, setMobile] = useState(false),
     [notice, setNotice] = useState("");
   const [market, setMarket] = useState<Market | null>(null),
@@ -654,7 +663,23 @@ export default function App() {
     news?.data.filter(
       (a) => Date.parse(a.published_at) > Date.parse(previousVisit.current),
     ).length || 0;
+  useEffect(() => {
+    const restore = () => {
+      setPage(pageFromUrl());
+      setMobile(false);
+      setSearchOpen(false);
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+  useEffect(() => {
+    const label = navigation.find((item) => item.id === page)?.label || "Preferencias y respaldo";
+    document.title = label + " · Brújula Bursátil";
+  }, [page]);
   function go(p: Page) {
+    if (window.location.pathname !== pagePaths[p])
+      window.history.pushState(null, "", pagePaths[p]);
     setPage(p);
     setMobile(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1857,7 +1882,15 @@ export default function App() {
               key={selected.id}
               asset={selected}
               theme={preferences.theme === "claro" ? "light" : "dark"}
-              onSearch={() => setSearchOpen(true)}
+              onSearch={() => {
+                setQuery("");
+                setSearchPage(1);
+                setExchange("todos");
+                setKind("todos");
+                setCountry("todos");
+                setSector("todos");
+                setSearchOpen(true);
+              }}
             />
           )}
           {page === "riesgo" && (
@@ -2065,7 +2098,7 @@ export default function App() {
               <section className="panel settings-panel">
                 <Compass size={27} />
                 <h2>Hecho para crecer con vos</h2>
-                <p>Brújula Bursátil · v0.4.1</p>
+                <p>Brújula Bursátil · v0.4.3</p>
                 <p>
                   Un proyecto personal de German Bartoli, con la colaboración de
                   Codex. Código abierto, datos personales locales.
@@ -2193,6 +2226,11 @@ export default function App() {
                       }
                     />
                   </button>
+                  {page === "analisis" && (
+                    <button className="primary compact" onClick={() => choose(a)}>
+                      Analizar
+                    </button>
+                  )}
                   <button
                     className="secondary compact"
                     onClick={() => {
