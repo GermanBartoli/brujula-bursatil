@@ -407,3 +407,22 @@ test("Noticias de Asia envían países concretos y la IA recibe solo pesos", asy
     globalThis.fetch = originalFetch;
   }
 });
+
+test("NVIDIA conserva sus plazas y convierte ambos importes antes de restar", () => {
+  for (const id of ["FWB:NVD", "XETR:NVD"]) {
+    const asset = catalog.find(a => a.id === id)!;
+    const p = { asset, quantity: 2, cost: 193.90, updatedAt: "" };
+    const m = { ...market, global: { [id]: { symbol: providerSymbol(id)!, price: 184, currency: "EUR", asOf: "", change: null, volume: null } } };
+    const usd = totals([p], m, "USD");
+    assert.equal(usd.value, 460);
+    assert.ok(Math.abs(usd.cost - 484.75) < 1e-8);
+    assert.ok(Math.abs(usd.profit + 24.75) < 1e-8);
+    assert.equal(totals([p], { ...m, fx: {} }, "USD").missing, 1);
+    assert.equal(quoteFor(asset, { ...m, global: { [id]: { ...m.global[id], currency: "USD" } } }), undefined);
+  }
+});
+test("ISIN y CUSIP ofrecen plazas; FIGI compuesto conserva la estadounidense", () => {
+  for (const q of ["US67066G1040", "CUSIP:67066G104", "ISIN US67066G1040"])
+    assert.deepEqual(catalog.filter(a => matchesSearch(a,q)).map(a => a.id).sort(), ["FWB:NVD", "NASDAQ:NVDA", "XETR:NVD"]);
+  assert.deepEqual(catalog.filter(a => matchesSearch(a,"BBG000BBJQV0")).map(a => a.id), ["NASDAQ:NVDA"]);
+});

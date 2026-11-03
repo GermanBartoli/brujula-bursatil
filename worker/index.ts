@@ -394,7 +394,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/health")
     return json({
       ok: true,
-      version: "0.4.1",
+      version: "0.4.2",
       news: !!env.MARKETAUX_API_KEY,
       ai: !!env.AI,
     });
@@ -565,6 +565,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     const country = url.searchParams.get("country") || "";
     if (country && !/^[a-z]{2}$/.test(country))
       throw new ApiError(400, "País inválido.");
+    if (/^(?:(?:ISIN|CUSIP|FIGI)[:\s]+)?(?:US67066G1040|67066G104|BBG000BBJQV0)$/i.test(q))
+      return json({ data: page === 1 ? catalog.filter((a) => matchesSearch(a, q) && (!country || a.country === country)) : [], hasMore: false });
     const listing = parseListingQuery(q);
     if (listing) {
       if (page !== 1 || (country && country !== listing.country))

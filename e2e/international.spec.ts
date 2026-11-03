@@ -214,3 +214,27 @@ test("Evalúa fundamentos y navega las nuevas secciones sin desbordes", async ({
     "-50 puntos básicos",
   );
 });
+
+test("Amplía el gráfico y permite volver a la vista normal", async ({ page }) => {
+  await page.getByRole("button", { name: "Ver en pantalla completa", exact: true }).click();
+  await expect(page.locator(".widget-chart")).toHaveClass(/widget-expanded/);
+  await expect(page.getByRole("button", { name: "Salir de pantalla completa" })).toBeVisible();
+  const size = await page.locator(".widget-chart").boundingBox();
+  expect(size!.height).toBeGreaterThan(800);
+  await page.getByRole("button", { name: "Salir de pantalla completa" }).click();
+  await expect(page.locator(".widget-chart")).not.toHaveClass(/widget-expanded/);
+});
+test("Busca por ISIN y muestra costo y cotización en monedas explícitas", async ({ page }) => {
+  await page.getByRole("button", { name: "Agregar acción", exact: true }).click();
+  await page.getByLabel("Buscar instrumento").fill("US67066G1040");
+  await expect(page.locator(".search-result")).toHaveCount(3);
+  await page.locator(".search-result").filter({ hasText: "Xetra" }).getByRole("button", { name: "Registrar", exact: true }).click();
+  await page.getByLabel("Cantidad de títulos").fill("2");
+  await page.getByLabel(/Precio promedio/).fill("90");
+  await page.getByRole("button", { name: "Guardar posición" }).click();
+  await go(page, "Mi cartera");
+  await expect(page.locator("tbody")).toContainText("Costo total:");
+  await expect(page.getByRole("columnheader", { name: "Cotización por título" })).toBeVisible();
+  await expect(page.locator("tbody")).toContainText("80,00");
+  await expect(page.locator("tbody")).toContainText("225,00");
+});

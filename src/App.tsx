@@ -49,6 +49,7 @@ import {
   emptyData,
   parseBackup,
   quoteFor,
+  positionQuote,
   storageKey,
   totals,
 } from "./portfolio";
@@ -1737,8 +1738,9 @@ export default function App() {
                         <th>Instrumento</th>
                         <th>Cantidad</th>
                         <th>Costo unitario</th>
-                        <th>Valor estimado</th>
-                        <th>Resultado</th>
+                        <th>Cotización por título</th>
+                        <th>Valor total ({data.currency})</th>
+                        <th>Resultado ({data.currency})</th>
                         <th>Gestionar</th>
                       </tr>
                     </thead>
@@ -1755,6 +1757,7 @@ export default function App() {
                             market,
                             data.currency,
                           );
+                          const quote = positionQuote(p, market);
                           return (
                             <tr key={p.asset.id}>
                               <td>
@@ -1780,6 +1783,11 @@ export default function App() {
                                   p.cost,
                                   p.costCurrency || p.asset.currency,
                                 )}
+                                <small>Costo total: {format(cost, data.currency)}</small>
+                              </td>
+                              <td>
+                                {quote ? format(quote.price, p.asset.currency) : "Sin cotización"}
+                                <small>{p.asset.exchange} · {p.asset.currency}</small>
                               </td>
                               <td>
                                 {format(value, data.currency)}
@@ -1835,6 +1843,7 @@ export default function App() {
                 />
               )}
               <p className="footnote">
+                El resultado resta el costo total al valor total, ambos en {data.currency}.
                 El costo y el valor se convierten con los tipos de cambio
                 actuales (ARS vía CCL): el resultado mide la variación en moneda
                 de origen, no la ganancia histórica por tipo de cambio. No
@@ -2132,7 +2141,7 @@ export default function App() {
               <input
                 autoFocus
                 aria-label="Buscar instrumento"
-                placeholder="NVIDIA, ETR:NVD, FRA:NVD, NVD.DE…"
+                placeholder="Empresa, bolsa:ticker, ISIN, CUSIP o FIGI conocido…"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);

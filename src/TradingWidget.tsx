@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 export default function TradingWidget({
   symbol,
   theme = "dark",
@@ -9,6 +9,36 @@ export default function TradingWidget({
   kind?: "chart" | "profile" | "calendar" | "financials" | "technical";
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const shell = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const sync = () => setExpanded(document.fullscreenElement === shell.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  useEffect(() => {
+    if (!expanded) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", escape);
+    };
+  }, [expanded]);
+  async function toggleFullscreen() {
+    if (expanded) {
+      if (document.fullscreenElement === shell.current) await document.exitFullscreen();
+      setExpanded(false);
+    } else {
+      setExpanded(true);
+      try { await shell.current?.requestFullscreen(); }
+      catch { /* Vista ampliada si el navegador no permite pantalla completa nativa. */ }
+    }
+  }
   useEffect(() => {
     const container = ref.current;
     if (!container) return;
@@ -73,7 +103,14 @@ export default function TradingWidget({
     };
   }, [symbol, kind, theme]);
   return (
-    <div className={`widget-shell widget-${kind}`}>
+    <div ref={shell} className={`widget-shell widget-${kind}${expanded ? " widget-expanded" : ""}`}>
+      {kind === "chart" && (
+        <div className="widget-toolbar">
+          <button className="secondary compact" onClick={toggleFullscreen} aria-pressed={expanded}>
+            {expanded ? "Salir de pantalla completa" : "Ver en pantalla completa"}
+          </button>
+        </div>
+      )}
       <div className="tradingview-widget-container" ref={ref} />
       <a
         className="widget-credit"
