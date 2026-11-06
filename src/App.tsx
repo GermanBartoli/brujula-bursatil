@@ -1,3 +1,5 @@
+import { NewsSummary } from "./NewsSummary";
+import { contextFor, sectorFilters, parseDomains, officialSources } from "./news";
 import { Research, RiskPanel, MacroPanel, Resources } from "./Workspace";
 import { currencies, positionValue } from "./portfolio";
 import {
@@ -137,7 +139,7 @@ const time = (date: string) => {
 const newsRequests = new Map<string, Promise<unknown>>();
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const cacheable = path.startsWith("news?") && !options;
-  const key = "brujula:noticias:v2:" + path;
+  const key = "brujula:noticias:v3:" + path;
   if (cacheable) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(key) || "null");
@@ -495,6 +497,13 @@ export default function App() {
       ),
     ).values(),
   ];
+  const [sectorChoice, setSectorChoice] = useState("");
+  const [sourceMode, setSourceMode] = useState("all");
+  const [domains, setDomains] = useState(() => {
+    try { return parseDomains(localStorage.getItem("brujula:fuentes:v1") || "").join(","); } catch { return ""; }
+  });
+  const [domainDraft, setDomainDraft] = useState(domains);
+  const [sourceError, setSourceError] = useState("");
   const customFilter = preferences.filters.find((f) => f.id === newsScope);
   const newsAsset = followed.find((a) => a.id === newsScope) || selected;
   const allSymbols = useMemo(
@@ -522,12 +531,21 @@ export default function App() {
     .filter(Boolean)
     .slice(newsBatch * 15, (newsBatch + 1) * 15)
     .join(",");
-  const newsSector = newsMode === "sector" ? newsAsset.sector : "";
+  const singleAsset = !customFilter && !["lista", "mercado"].includes(newsScope);
+  const etfContext = singleAsset && (newsAsset.kind === "etf" || /^(MEUD\.PA|IB01\.L)$/.test(newsAsset.symbol));
+  const effectiveMode = etfContext ? "sector" : newsMode;
+  const newsSector = effectiveMode === "sector" ? sectorChoice || contextFor(newsAsset) : "";
+  const officialKey = newsAsset.symbol.split(".")[0];
+  const officialSource = singleAsset ? officialSources[officialKey] : undefined;
+  const sourceQuery = sourceMode === "official" && officialSource ? "&official=" + officialKey : sourceMode === "custom" ? "&domains=" + encodeURIComponent(domains) : "";
+  useEffect(() => { setSectorChoice(""); setSourceMode("all"); }, [newsScope]);
   const previousNewsFilter = useRef("");
   useEffect(() => {
     const filter = JSON.stringify([
       allSymbols,
-      newsMode,
+      effectiveMode,
+      sourceQuery,
+      newsScope,
       newsSector,
       newsLanguage,
       newsCountry,
@@ -546,7 +564,7 @@ export default function App() {
     Promise.all(
       Array.from({ length: newsPage }, (_, i) =>
         api<News>(
-          `news?symbols=${encodeURIComponent(symbols)}&mode=${newsMode}&sector=${encodeURIComponent(newsSector)}&page=${i + 1}&language=${newsLanguage}&country=${newsCountry}`,
+          `news?symbols=${encodeURIComponent(symbols)}&mode=${effectiveMode}&sector=${encodeURIComponent(newsSector)}&page=${i + 1}&language=${newsLanguage}&country=${newsCountry}${sourceQuery}`,
         ),
       ),
     )
@@ -578,6 +596,9 @@ export default function App() {
     allSymbols,
     symbols,
     newsBatch,
+    effectiveMode,
+    sourceQuery,
+    newsScope,
     newsMode,
     newsSector,
     newsPage,
@@ -801,11 +822,20 @@ export default function App() {
         </select>
         <select
           aria-label="Tipo de noticias"
-          value={newsMode}
+          value={effectiveMode}
+          disabled={etfContext}
           onChange={(e) => setNewsMode(e.target.value)}
         >
           <option value="direct">Menciones directas</option>
           <option value="sector">Contexto del sector</option>
+        </select>
+        {effectiveMode === "sector" && <select aria-label="Sector de noticias" value={newsSector} onChange={e => setSectorChoice(e.target.value)}>
+          {Object.keys(sectorFilters).map(s => <option key={s}>{s}</option>)}
+        </select>}
+        <select aria-label="Fuentes de noticias" value={sourceMode} onChange={e => setSourceMode(e.target.value)}>
+          <option value="all">Todas las fuentes</option>
+          <option value="custom">Mis fuentes</option>
+          {officialSource && <option value="official">Publicaciones oficiales</option>}
         </select>
         <select
           aria-label="Idioma de las noticias"
@@ -834,9 +864,24 @@ export default function App() {
             ))}
         </select>
         <span className="muted">
-          Marketaux · hasta 3 noticias por empresa y página · caché de 30 min
+          {sourceMode === "official" && ["NVDA", "NVD", "IBKR"].includes(officialKey) ? "Sitio oficial · hasta 12 comunicados por página" : "Marketaux · hasta 3 noticias por consulta y página"} · caché de 30 min
         </span>
       </div>
+      <details className="news-sources">
+        <summary>Administrar fuentes personalizadas</summary>
+        <form onSubmit={e => { e.preventDefault(); try { const value = parseDomains(domainDraft).join(","); if (!value) throw Error("Agregá al menos un dominio."); localStorage.setItem("brujula:fuentes:v1", value); setDomains(value); setSourceMode("custom"); setSourceError(""); } catch (error) { setSourceError((error as Error).message); } }}>
+          <label>Dominios de noticias<input aria-label="Dominios de noticias" value={domainDraft} onChange={e => setDomainDraft(e.target.value)} placeholder="reuters.com, cnbc.com" maxLength={2000} /></label>
+          <button className="secondary" type="submit">Guardar fuentes</button>
+          <button className="text-btn" type="button" onClick={() => { try { localStorage.removeItem("brujula:fuentes:v1"); setDomains(""); setDomainDraft(""); setSourceMode("all"); setSourceError(""); } catch { setSourceError("No se pudieron borrar las fuentes locales."); } }}>Restablecer fuentes</button>
+        </form>
+        <p className="footnote">Hasta 8 dominios. Se guardan en este navegador y filtran la cobertura de Marketaux; un sitio no indexado puede no devolver resultados.</p>
+        {sourceError && <p role="alert">{sourceError}</p>}
+      </details>
+      {etfContext && <p className="footnote">ETF: contexto de {newsSector.toLowerCase()}. No son menciones directas ni una lista verificada de sus participaciones. Podés elegir otro sector.</p>}
+      {!singleAsset && <p className="footnote">Las acciones requieren mención visible; los ETF conocidos aportan contexto de su sector o clase de activo.</p>}
+      {officialSource && <p className="footnote"><a href={officialSource.url} target="_blank" rel="noopener noreferrer">{officialSource.name} ↗</a> · Consultá documentos y publicaciones originales. NVIDIA e IBKR se consultan directamente en el sitio oficial. Para otros emisores se muestran publicaciones indexadas; la cobertura puede ser incompleta.</p>}
+      {sourceMode === "custom" && <p className="footnote">Fuentes activas: {domains || "ninguna configurada; se muestran todas hasta guardar una fuente"}.</p>}
+      <NewsSummary articles={news?.data || []} context={newsSector || (singleAsset ? newsAsset.name : "Mercado y seguimiento")} busy={newsBusy} />
       {newsBusy ? (
         <div className="loading">
           <LoaderCircle className="spin" />
@@ -1390,7 +1435,7 @@ export default function App() {
                         <span>
                           {selected.symbol} <b>·</b> {selected.exchange}{" "}
                           <b>·</b>{" "}
-                          {selected.kind === "cedear" ? "CEDEAR" : "Acción"}
+                          {selected.kind === "cedear" ? "CEDEAR" : selected.kind === "etf" ? "ETF" : "Acción"}
                         </span>
                       </div>
                     </div>

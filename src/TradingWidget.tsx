@@ -8,6 +8,8 @@ export default function TradingWidget({
   theme?: "dark" | "light";
   kind?: "chart" | "profile" | "calendar" | "financials" | "technical";
 }) {
+  const aliases: Record<string, string> = { "MEUD.PA": "EURONEXT:MEUD", "OTROS:MEUD.PA": "EURONEXT:MEUD", "EURONEXT:MEUD.PA": "EURONEXT:MEUD", "IB01.L": "LSE:IB01", "OTROS:IB01.L": "LSE:IB01" };
+  symbol = aliases[symbol] || symbol;
   const ref = useRef<HTMLDivElement>(null);
   const shell = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);

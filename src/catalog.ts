@@ -87,6 +87,8 @@ catalog.push(
         "USD",
         "etf",
       ],
+      ["MEUD.PA", "Amundi Core STOXX Europe 600 UCITS ETF Acc", "EURONEXT", "fr", "EUR", "etf"],
+      ["IB01", "iShares $ Treasury Bond 0-1yr UCITS ETF USD Acc", "LSE", "gb", "USD", "etf"],
       ["SPY", "SPDR S&P 500 ETF", "AMEX", "us", "USD", "etf"],
       ["QQQ", "Invesco QQQ Trust", "NASDAQ", "us", "USD", "etf"],
       ["IBKR", "Interactive Brokers Group", "NASDAQ", "us", "USD", "accion"],
@@ -113,7 +115,7 @@ catalog.push(
           ? "Finanzas"
           : "Otros",
     underlying: symbol,
-    tv: exchange + ":" + symbol,
+    tv: exchange + ":" + symbol.replace(/\.PA$/, ""),
   })),
 );
 export const countries = [

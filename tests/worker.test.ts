@@ -175,14 +175,14 @@ test("Noticias por empresa: caché compartida, paginación, deduplicación y err
       data: [
         {
           uuid: `comun-${page}`,
-          title: "Noticia común",
+          title: "Noticia común de $AAPL y $NVDA",
           url: `https://medio.test/comun-${page}`,
           entities: [{ symbol }],
           published_at: "2026-11-02",
         },
         {
           uuid: `${symbol}-${page}`,
-          title: symbol,
+          title: "$" + symbol,
           url: `https://medio.test/${symbol}-${page}`,
           entities: [{ symbol }],
           published_at: "2026-11-02",

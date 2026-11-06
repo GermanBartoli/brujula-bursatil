@@ -143,7 +143,7 @@ Cada evaluación se guarda en `brujula:evaluacion:v1:<bolsa:ticker>` con fuente,
 
 ### Riesgo, IA y macroeconomía
 
-El riesgo bajo, medio o alto lo asigna el usuario. Los porcentajes usan el valor de mercado convertido, incluyendo una categoría sin clasificar y excluyendo posiciones sin valoración. No representan probabilidades de pérdida. La IA analiza hasta 100 posiciones valuadas, concentración y posibles solapamientos sin afirmar conocer la tolerancia personal del inversor ni la composición interna de fondos. El servidor valida pesos y campos, rechaza orígenes ajenos y limita consultas.
+El riesgo bajo, medio o alto lo asigna el usuario. Los porcentajes usan el valor convertido, incluyendo una categoría sin clasificar. Se puede incluir al costo una posición sin cotización, identificada como estimación; las posiciones sin una conversión válida permanecen excluidas. No representan probabilidades de pérdida. La IA analiza hasta 100 posiciones valuadas, concentración y posibles solapamientos sin afirmar conocer la tolerancia personal del inversor ni la composición interna de fondos. El servidor valida pesos y campos, rechaza orígenes ajenos y limita consultas.
 
 El calendario incorpora una serie anual del [Banco Mundial / FMI](https://data.worldbank.org/indicator/FP.CPI.TOTL.ZG), con hasta ocho observaciones disponibles y variación en puntos porcentuales. No sustituye el último IPC mensual. EUR corresponde a la zona euro. Las reuniones y resultados del widget no se extraen automáticamente: se puede anotar el evento, elegir posiciones por moneda o toda la cartera e introducir tasas y sensibilidades.
 
@@ -152,3 +152,15 @@ El escenario calcula `Δprecio % = Δtasa en puntos porcentuales × sensibilidad
 ### Verificaciones adicionales
 
 Las pruebas cubren cruces de divisas, costos en otra moneda, GBp, identidad por mercado, respaldos anteriores, exclusión de datos faltantes, riesgo por valor, validación del perfil IA y simulación macroeconómica. Las pruebas de navegador recorren ETFs y noticias por región, la fórmula de VHYL, compra en USD con total en GBP, perfil, fundamentos separados por ticker y ausencia de desborde en móvil.
+
+### Cotizaciones, noticias y fuentes (v0.5.0)
+
+- MEUD.PA (París, EUR) e IB01 (Londres, USD) forman parte del catálogo. Los identificadores antiguos `OTROS:MEUD.PA` y `OTROS:IB01.L` recuperan precios sin reescribir el respaldo ni sustituir la moneda. Los gráficos reconocen los alias anteriores.
+- Riesgo permite incluir al costo las posiciones sin cotización, con etiqueta «estimado al costo» y opción de excluirlas. Este recurso no altera el valor de mercado ni las ganancias de la cartera; una conversión faltante sigue sin inventarse.
+- Las menciones directas requieren entidad identificada y nombre o ticker explícito en título/extracto. Las noticias sobre NVIDIA alemana usan la entidad de la empresa estadounidense. La cobertura puede reducirse si el extracto no contiene la mención.
+- Los ETF seleccionados usan contexto configurable por sector o clase de activo. IB01 consulta bonos del Tesoro y tasas; MEUD, renta variable europea; VHYL, contexto diversificado. No se afirma conocer participaciones ni ponderaciones actuales. Hay sectores de salud, industria, materiales, servicios e inmobiliario, además de los existentes.
+- NVIDIA e Interactive Brokers consultan directamente sus publicaciones oficiales (RSS y página de comunicados, respectivamente), con fecha y enlaces originales. Otros emisores configurados ofrecen el filtro por dominio de Marketaux y acceso a documentación oficial: la indexación no garantiza cubrir la última publicación. Los comunicados directos conservan su idioma original y no aplican el filtro regional.
+- Se pueden guardar hasta ocho dominios de prensa en este navegador. Filtran fuentes indexadas por Marketaux; no ejecutan solicitudes a URLs arbitrarias. Se guardan en `brujula:fuentes:v1`, fuera del respaldo de cartera, y pueden restablecerse.
+- El resumen con IA usa hasta doce noticias recuperadas desde la caché del servidor, con referencias numeradas. Distingue hechos de posibles efectos sobre tasas, inflación, regulación y sectores, sin inventar composición ni predecir precios.
+
+Fuentes técnicas: [Marketaux](https://www.marketaux.com/documentation), [RSS oficial de NVIDIA](https://investor.nvidia.com/investor-resources/rss/default.aspx), [comunicados de IBKR](https://investors.interactivebrokers.com/en/general/about/press-releases-nav.php), [fondo MEUD](https://www.amundietf.de/de/professionell/products/equity/amundi-core-stoxx-europe-600-ucits-etf-acc/lu0908500753), [ficha IB01](https://www.ishares.com/uk/individual/en/literature/fact-sheet/ib01-ishares-treasury-bond-0-1yr-ucits-etf-fund-fact-sheet-en-gb.pdf).

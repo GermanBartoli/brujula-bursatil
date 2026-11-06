@@ -5,11 +5,13 @@ export function riskBreakdown(
   positions: Position[],
   market: Market | null,
   currency: string,
+  includeCost = false,
 ) {
-  const rows = positions.map((p) => ({
-    ...p,
-    value: positionValue(p, market, currency).value,
-  }));
+  const rows = positions.map((p) => {
+    const current = positionValue(p, market, currency);
+    const estimated = includeCost && current.value === null && current.cost !== null && current.cost > 0;
+    return { ...p, value: estimated ? current.cost : current.value, estimated };
+  });
   const valued = rows.filter((p) => p.value !== null);
   const total = valued.reduce((sum, p) => sum + p.value!, 0);
   const groups = ["bajo", "medio", "alto", "sin clasificar"].map((risk) => {

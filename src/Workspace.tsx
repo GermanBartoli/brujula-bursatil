@@ -209,12 +209,13 @@ export function RiskPanel({
   market: Market | null;
   currency: string;
 }) {
-  const report = riskBreakdown(positions, market, currency);
+  const [includeCost, setIncludeCost] = useState(true);
+  const report = riskBreakdown(positions, market, currency, includeCost);
   const [analysis, setAnalysis] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const signature = JSON.stringify(
-    report.rows.map((p) => [p.asset.id, p.risk, p.weight]),
+    report.rows.map((p) => [p.asset.id, p.risk, p.weight, p.estimated]),
   );
   const currentSignature = useRef(signature);
   currentSignature.current = signature;
@@ -239,6 +240,7 @@ export function RiskPanel({
               currency: p.asset.currency,
               risk: p.risk || "sin clasificar",
               weight: Number(p.weight!.toFixed(4)),
+              estimated: p.estimated,
             })),
         }),
       });
@@ -260,10 +262,12 @@ export function RiskPanel({
       <section className="panel workspace-panel">
         <h2>Riesgo según tu clasificación</h2>
         <p>
-          Los porcentajes se ponderan por valor actual convertido a {currency},
+          Los porcentajes se ponderan por valor convertido a {currency},
           no por cantidad de acciones. Editá cada posición para asignar riesgo
           bajo, medio o alto.
         </p>
+        <label><input type="checkbox" checked={includeCost} onChange={(e) => setIncludeCost(e.target.checked)} /> Incluir al costo las posiciones sin cotización (estimación)</label>
+        <p className="footnote">{report.rows.filter(p => p.estimated).length} posiciones estimadas al costo. No representa su precio actual ni se usa para calcular ganancias.</p>
         <div className="risk-grid">
           {report.groups.map((g) => (
             <div className={`risk-card risk-${g.risk}`} key={g.risk}>
@@ -303,7 +307,7 @@ export function RiskPanel({
                   <td>
                     {p.weight === null
                       ? "Sin valorar"
-                      : `${p.weight.toFixed(1)}%`}
+                      : `${p.weight.toFixed(1)}%${p.estimated ? " · estimado al costo" : ""}`}
                   </td>
                 </tr>
               ))}

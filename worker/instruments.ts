@@ -24,6 +24,8 @@ export function providerSymbol(id: string): string | null {
     if (/\.(AS|PA|BR|LS)$/.test(symbol)) return symbol;
     return ["ASML", "VHYL", "VWRL"].includes(symbol) ? symbol + ".AS" : null;
   }
+  // Los respaldos antiguos guardaban la plaza dentro del ticker bajo OTROS.
+  if (exchange === "OTROS" && /\.(PA|AS|BR|LS|L|DE|F|HK|T|SS|SZ|SW|TO|AX)$/.test(symbol)) return symbol;
   if (!(exchange in suffix)) return null;
   const ticker = exchange === "HKEX" ? symbol.padStart(4, "0") : symbol;
   return suffix[exchange] && ticker.endsWith(suffix[exchange])

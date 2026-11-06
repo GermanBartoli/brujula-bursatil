@@ -2175,3 +2175,10 @@ dialog::backdrop {
   position: fixed; inset: 0; width: 100%; height: 100dvh;
   z-index: 1000; background: var(--bg, #142019); padding: 8px;
 }
+.news-sources, .news-summary { margin: 16px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.news-sources summary { cursor: pointer; font-weight: 600; }
+.news-sources form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 16px; }
+.news-sources label { display: grid; gap: 8px; flex: 1 1 260px; }
+.news-sources input { width: 100%; min-width: 0; }
+.news-summary li { margin: 8px 0; overflow-wrap: anywhere; }
+.news-summary a, .news-sources a { color: inherit; }
