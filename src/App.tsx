@@ -864,7 +864,7 @@ export default function App() {
             ))}
         </select>
         <span className="muted">
-          {sourceMode === "official" && ["NVDA", "NVD", "IBKR"].includes(officialKey) ? "Sitio oficial · hasta 12 comunicados por página" : "Marketaux · hasta 3 noticias por consulta y página"} · caché de 30 min
+          {sourceMode === "official" && ["NVDA", "NVD", "IBKR"].includes(officialKey) ? "Sitio oficial · hasta 12 comunicados por página" : news?.source === "Google News RSS" ? "Google News RSS · titulares de fuentes externas" : "Marketaux · hasta 3 noticias por consulta y página"} · caché de 30 min
         </span>
       </div>
       <details className="news-sources">

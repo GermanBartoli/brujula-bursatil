@@ -56,7 +56,7 @@ test("ETF usa clase de activo y sectores sin consultar su ticker en noticias", a
   assert.equal(contextFor(catalog.find(a => a.symbol === "MEUD.PA")!), "Europa diversificada");
   const original = globalThis.fetch;
   const calls: URL[] = [];
-  globalThis.fetch = async input => { calls.push(new URL(String(input))); return Response.json({ data: [], meta: {} }); };
+  globalThis.fetch = async input => { if (String(input).includes("news.google.com")) return new Response("<rss></rss>"); calls.push(new URL(String(input))); return Response.json({ data: [], meta: {} }); };
   try {
     for (const symbol of ["IB01.L", "MEUD.PA", "VHYL.AS"]) {
       assert.equal((await worker.fetch(new Request("https://test/api/news?symbols=" + symbol), env)).status, 200);
@@ -97,4 +97,34 @@ test("El resumen rechaza entradas inválidas y solicitudes de otro origen", asyn
   }
   const r = await worker.fetch(new Request("https://test/api/news-summary", { method: "POST", headers: { Origin: "https://otro.test" }, body: "{}" }), env);
   assert.equal(r.status, 403);
+});
+
+import { fallbackQuery, parseNewsFeed } from "../worker/newsFallback.ts";
+const rssFixture = '<rss><channel><item><title>NVIDIA reports results - Reuters</title><link>https://news.google.com/rss/articles/prueba</link><pubDate>Fri, 06 Nov 2026 12:00:00 GMT</pubDate><source url="https://www.reuters.com">Reuters</source></item><item><title>Other company grows - CNBC</title><link>https://news.google.com/rss/articles/otra</link><pubDate>Fri, 06 Nov 2026 11:00:00 GMT</pubDate><source url="https://www.cnbc.com">CNBC</source></item></channel></rss>';
+test("RSS alternativo conserva menciones directas, fuentes y alcance del ETF", async () => {
+  const direct = await parseNewsFeed(rssFixture, ["NVDA"], "", []);
+  assert.equal(direct.length, 1);
+  assert.equal(direct[0].entities[0].symbol, "NVDA");
+  assert.match(direct[0].description, /solo se dispone del titular/);
+  const sector = await parseNewsFeed(rssFixture, [], "Tecnología", ["cnbc.com"]);
+  assert.equal(sector.length, 1);
+  assert.match(sector[0].source, /CNBC/);
+  assert.ok(fallbackQuery(["IB01.L"], "", []).includes("Treasury"));
+  assert.ok(!fallbackQuery(["IB01.L"], "", []).includes('"IB01.L"'));
+});
+test("Activa RSS cuando el proveedor principal falla sin perder el contexto", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async input => {
+    if (String(input).includes("api.marketaux.com")) throw Error("Tiempo de espera agotado");
+    assert.ok(String(input).startsWith("https://news.google.com/rss/search?"));
+    return new Response(rssFixture);
+  };
+  try {
+    const response = await worker.fetch(new Request("https://test/api/news?symbols=NVDA"), env);
+    const data: any = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(data.source, "Google News RSS");
+    assert.equal(data.data.length, 1);
+    assert.match(data.warnings[0], /Fuente alternativa/);
+  } finally { globalThis.fetch = original; }
 });

@@ -164,3 +164,7 @@ Las pruebas cubren cruces de divisas, costos en otra moneda, GBp, identidad por 
 - El resumen con IA usa hasta doce noticias recuperadas desde la caché del servidor, con referencias numeradas. Distingue hechos de posibles efectos sobre tasas, inflación, regulación y sectores, sin inventar composición ni predecir precios.
 
 Fuentes técnicas: [Marketaux](https://www.marketaux.com/documentation), [RSS oficial de NVIDIA](https://investor.nvidia.com/investor-resources/rss/default.aspx), [comunicados de IBKR](https://investors.interactivebrokers.com/en/general/about/press-releases-nav.php), [fondo MEUD](https://www.amundietf.de/de/professionell/products/equity/amundi-core-stoxx-europe-600-ucits-etf-acc/lu0908500753), [ficha IB01](https://www.ishares.com/uk/individual/en/literature/fact-sheet/ib01-ishares-treasury-bond-0-1yr-ucits-etf-fund-fact-sheet-en-gb.pdf).
+
+### Disponibilidad alternativa de noticias (v0.5.1)
+
+Cuando Marketaux falla o no devuelve resultados verificables, se consulta Google News RSS con el mismo contexto sectorial o nombres de empresa. Se mantienen las menciones visibles y la selección de dominios. El proveedor alternativo se identifica en pantalla: solo aporta titulares, no el contenido completo, y su edición regional no garantiza el país de las empresas. La IA recibe explícitamente ese límite y conserva enlaces a las fuentes.

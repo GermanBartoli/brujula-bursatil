@@ -351,6 +351,7 @@ test("Noticias de Asia envían países concretos y la IA recibe solo pesos", asy
     },
   };
   globalThis.fetch = async (input) => {
+    if (String(input).includes("news.google.com")) return new Response("<rss></rss>");
     countries = new URL(String(input)).searchParams.get("countries") || "";
     return Response.json({ data: [], meta: { found: 0 } });
   };

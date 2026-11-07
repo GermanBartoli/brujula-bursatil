@@ -6,6 +6,7 @@ import {
 } from "./instruments.ts";
 import { sectorFilters, contextFor, parseDomains, directMention, officialSources } from "../src/news.ts";
 import { officialFeeds, fetchOfficial } from "./official.ts";
+import { fallbackNews } from "./newsFallback.ts";
 import { summarizeNews } from "./summary.ts";
 import { countries } from "../src/catalog.ts";
 import { argentinaSeeds } from "../src/argentina.ts";
@@ -131,7 +132,7 @@ export async function marketaux(
     for (const [key, value] of Object.entries(params))
       url.searchParams.set(key, value);
     url.searchParams.set("api_token", keys[i]);
-    const r = await fetcher(url, { signal: AbortSignal.timeout(15000) });
+    const r = await fetcher(url, { signal: AbortSignal.timeout(8000) });
     let data: any;
     try {
       data = await r.json();
@@ -739,6 +740,19 @@ async function route(request: Request, env: Env): Promise<Response> {
           );
         }
       });
+    }
+    if (!articles.length) {
+      try {
+        const alternative = await cached(
+          "news-rss:v1:" + JSON.stringify({ symbols, sector, domains, language, country }), 1800,
+          () => fallbackNews(symbols, mode === "sector" ? sector : "", domains, language, country),
+        );
+        const data = alternative.slice((page - 1) * 12, page * 12);
+        await Promise.all(data.map(a => cached("article:" + a.uuid, 86400, async () => a)));
+        return json({ data, fetchedAt: new Date().toISOString(), source: "Google News RSS", hasMore: alternative.length > page * 12, warnings: ["Fuente alternativa: Marketaux no devolvió resultados verificables. Solo hay titulares; el idioma y la región orientan la edición de búsqueda, no garantizan el país de las empresas."] });
+      } catch {
+        warnings.push("La fuente alternativa tampoco respondió. Reintentá o consultá las publicaciones oficiales.");
+      }
     }
     const unique = new Map<string, Article>();
     for (const article of articles) {
