@@ -109,6 +109,7 @@ test("RSS alternativo conserva menciones directas, fuentes y alcance del ETF", a
   const sector = await parseNewsFeed(rssFixture, [], "Tecnología", ["cnbc.com"]);
   assert.equal(sector.length, 1);
   assert.match(sector[0].source, /CNBC/);
+  assert.equal((await parseNewsFeed(rssFixture, ["IB01.L"], "Tecnología", [])).length, 2);
   assert.ok(fallbackQuery(["IB01.L"], "", []).includes("Treasury"));
   assert.ok(!fallbackQuery(["IB01.L"], "", []).includes('"IB01.L"'));
 });

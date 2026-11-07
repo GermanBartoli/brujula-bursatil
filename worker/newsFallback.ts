@@ -39,7 +39,7 @@ export async function parseNewsFeed(xml: string, symbols: string[], sector: stri
     let host: string;
     try { host = new URL(sourceUrl).hostname; const u = new URL(url); if (u.protocol !== "https:" || u.hostname !== "news.google.com") continue; } catch { continue; }
     if (!title || !Number.isFinite(Date.parse(date)) || (domains.length && !domains.some(d => host === d || host.endsWith("." + d)))) continue;
-    const bonds = sector === "Bonos del Tesoro" || symbols.some(s => /^IB01(?:\.L)?$/.test(s));
+    const bonds = sector === "Bonos del Tesoro" || (!sector && symbols.some(s => /^IB01(?:\.L)?$/.test(s)));
     if (bonds && !treasuryContext({ title })) continue;
     const matched = symbols.filter(symbol => {
       const asset = catalog.find(a => newsSymbol(a) === symbol || a.symbol === symbol);
