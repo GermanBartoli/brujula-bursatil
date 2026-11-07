@@ -168,3 +168,5 @@ Fuentes técnicas: [Marketaux](https://www.marketaux.com/documentation), [RSS of
 ### Disponibilidad alternativa de noticias (v0.5.1)
 
 Cuando Marketaux falla o no devuelve resultados verificables, se consulta Google News RSS con el mismo contexto sectorial o nombres de empresa. Se mantienen las menciones visibles y la selección de dominios. El proveedor alternativo se identifica en pantalla: solo aporta titulares, no el contenido completo, y su edición regional no garantiza el país de las empresas. La IA recibe explícitamente ese límite y conserva enlaces a las fuentes.
+
+La búsqueda de IB01 exige contexto visible del Tesoro estadounidense o la Reserva Federal; no acepta una referencia genérica a una tesorería. Este filtro se aplica tanto al proveedor principal como al alternativo.

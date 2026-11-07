@@ -11,7 +11,7 @@ export const sectorFilters: Record<string, Record<string, string>> = {
   Materiales: { industries: "Basic Materials" },
   Inmobiliario: { industries: "Real Estate" },
   Servicios: { industries: "Utilities" },
-  "Bonos del Tesoro": { search: '"Treasury" | "Federal Reserve" | "interest rates" | "bonos del Tesoro" | "tasas de interés"' },
+  "Bonos del Tesoro": { search: '"US Treasury" | "U.S. Treasury" | "Treasury yields" | "Treasury bonds" | "Treasury bills" | "Federal Reserve" | "Reserva Federal"' },
   "Europa diversificada": { search: '(Europe | European | eurozone | Europa | BCE | ECB) + (stocks | inflation | rates | regulation | acciones | inflación | tasas)' },
   "Fondos diversificados": { search: '"stock market" | "interest rates" | inflation | dividends | regulation | "mercado bursátil" | inflación | dividendos' },
 };
@@ -45,3 +45,8 @@ export const officialSources: Record<string, { name: string; url: string; domain
   IB01: { name: "iShares · ficha del fondo", url: "https://www.ishares.com/uk/individual/en/literature/fact-sheet/ib01-ishares-treasury-bond-0-1yr-ucits-etf-fund-fact-sheet-en-gb.pdf", domain: "ishares.com" },
   VHYL: { name: "Vanguard · información para inversores", url: "https://www.ie.vanguard/products", domain: "vanguard.co.uk" },
 };
+
+export function treasuryContext(article: { title?: string; description?: string; snippet?: string }): boolean {
+  const text = `${article.title || ""} ${article.description || ""} ${article.snippet || ""}`;
+  return /Federal Reserve|Reserva Federal|\bFOMC\b|\bFed\b|\bTreasurys\b|\bTreasur(?:y|ies)\s+(?:bonds?|notes?|yields?|bills?|debt|securities)\b|\b(?:US|U\.S\.|United States)\s+Treasur|bonos del Tesoro estadounidense/i.test(text);
+}

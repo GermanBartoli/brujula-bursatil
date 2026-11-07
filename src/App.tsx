@@ -139,7 +139,7 @@ const time = (date: string) => {
 const newsRequests = new Map<string, Promise<unknown>>();
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const cacheable = path.startsWith("news?") && !options;
-  const key = "brujula:noticias:v3:" + path;
+  const key = "brujula:noticias:v4:" + path;
   if (cacheable) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(key) || "null");

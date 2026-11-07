@@ -128,3 +128,11 @@ test("Activa RSS cuando el proveedor principal falla sin perder el contexto", as
     assert.match(data.warnings[0], /Fuente alternativa/);
   } finally { globalThis.fetch = original; }
 });
+
+import { treasuryContext } from "../src/news.ts";
+test("IB01 excluye coincidencias con tesorerías ajenas a los bonos estadounidenses", () => {
+  assert.equal(treasuryContext({ title: "National Single Window for Trade goes live", description: "Treasury officials discuss customs" }), false);
+  assert.equal(treasuryContext({ title: "Treasury yields rise after US jobs report" }), true);
+  assert.equal(treasuryContext({ title: "Federal Reserve holds interest rates" }), true);
+  assert.equal(treasuryContext({ title: "Foreign governments own fewer Treasurys" }), true);
+});

@@ -4,7 +4,7 @@ import {
   normalizeFx,
   validProfile,
 } from "./instruments.ts";
-import { sectorFilters, contextFor, parseDomains, directMention, officialSources } from "../src/news.ts";
+import { sectorFilters, contextFor, parseDomains, directMention, officialSources, treasuryContext } from "../src/news.ts";
 import { officialFeeds, fetchOfficial } from "./official.ts";
 import { fallbackNews } from "./newsFallback.ts";
 import { summarizeNews } from "./summary.ts";
@@ -691,7 +691,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       const results = await Promise.allSettled(
         filters.slice(i, i + 3).map((filter) =>
           cached(
-            `news:v4:${JSON.stringify(filter)}:${page}:${language}:${country}:${domains.join(",")}`,
+            `news:v5:${JSON.stringify(filter)}:${page}:${language}:${country}:${domains.join(",")}`,
             1800,
             async () => {
               const result = await marketaux(env, "news/all", {
@@ -709,6 +709,7 @@ async function route(request: Request, env: Env): Promise<Response> {
               } as Record<string, string>);
               const data: Article[] = (result.data || [])
                 .filter((a: any) => !filter.symbols || directMention(a, filter.symbols))
+                .filter((a: any) => filter.search !== sectorFilters["Bonos del Tesoro"].search || treasuryContext(a))
                 .filter((a: any) => {
                   if (!domains.length) return true;
                   try { const host = new URL(a.url).hostname; return domains.some(d => host === d || host.endsWith("." + d)); } catch { return false; }
@@ -744,7 +745,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!articles.length) {
       try {
         const alternative = await cached(
-          "news-rss:v1:" + JSON.stringify({ symbols, sector, domains, language, country }), 1800,
+          "news-rss:v2:" + JSON.stringify({ symbols, sector, domains, language, country }), 1800,
           () => fallbackNews(symbols, mode === "sector" ? sector : "", domains, language, country),
         );
         const data = alternative.slice((page - 1) * 12, page * 12);
