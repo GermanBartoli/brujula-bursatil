@@ -49,19 +49,19 @@ React, TypeScript, Vite, Tailwind CSS, Lucide y una API en el runtime de Workers
 Requiere Node.js 24 o posterior.
 
 ```powershell
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 Copy-Item .dev.vars.example .dev.vars
 ```
 
 Completá `.dev.vars` localmente con las claves de Marketaux. Está excluido de Git. Luego iniciá la API y, en otra terminal, el frontend:
 
 ```powershell
-npm run preview
+pnpm run preview
 ```
 
 ```powershell
-npm run dev
+pnpm run dev
 ```
 
 La aplicación de desarrollo se abre en `http://127.0.0.1:5173`; Vite redirige `/api` al servidor Pages de `127.0.0.1:8787`. Workers AI requiere conexión a Cloudflare y su binding. El build genera el cliente y `dist/_worker.js`; `_routes.json` dirige únicamente `/api/*` al Worker.
@@ -75,16 +75,16 @@ Se reutiliza el proyecto `brujula-bursatil`, con rama de producción `main` y bi
 Para desplegar manualmente con el token y cuenta ya configurados en el entorno:
 
 ```powershell
-npm run deploy
+pnpm run deploy
 ```
 
 ## Verificaciones
 
 ```powershell
-npm test
-npm run build
-npx playwright install chromium
-npm run test:e2e
+pnpm test
+pnpm run build
+pnpm exec playwright install chromium
+pnpm run test:e2e
 ```
 
 Las pruebas unitarias cubren conversión, cotización del CEDEAR frente a su subyacente, datos faltantes, importación inválida, respaldo de Marketaux por cuota, validación de IA y rechazo de solicitudes incorrectas. Las pruebas de navegador usan respuestas simuladas para no consumir cuotas: comprueban cartera persistente, exportación, navegación móvil, teclado y ausencia de desborde. La disponibilidad real de proveedores se verifica por separado al publicar.
