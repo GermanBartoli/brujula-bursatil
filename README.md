@@ -206,3 +206,11 @@ La versión 0.5.3 coordina los cambios entre pestañas mediante Web Locks y actu
 Repositorio mantenido por [Germán Bartoli](https://github.com/GermanBartoli). Guía revisada y actualizada con **Codex**, coautor de esta actualización documental. Los autores, colaboradores, licencias y recursos de terceros conservan sus créditos originales.
 
 Los commits de esta revisión incluyen `Co-authored-by: Codex <noreply@openai.com>`; esta atribución no modifica la autoría del historial anterior.
+
+<!-- firma-german-bartoli -->
+<p align="center">
+  <a href="https://germanbartoli.pages.dev/">
+    <img src="docs/autor/german-bartoli.webp" alt="German Bartoli — Developer" width="96" height="96" /><br />
+    Hecho por Germán Bartoli · Ver portfolio
+  </a>
+</p>

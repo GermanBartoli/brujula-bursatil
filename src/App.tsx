@@ -2194,7 +2194,7 @@ export default function App() {
             <span>
               Hecho para mirar más lejos <Compass size={13} />
             </span>
-          </footer>
+          </footer><div className="gb-credit"><a href="https://germanbartoli.pages.dev/" target="_blank" rel="noopener noreferrer" aria-label="Hecho por Germán Bartoli · Abrir portfolio"><span>Hecho por Germán Bartoli</span><img src="./german-bartoli.webp" alt="German Bartoli — Developer" width="64" height="64" loading="lazy" /></a></div>
         </main>
       </div>
       {filterEditor && (
