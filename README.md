@@ -1,5 +1,24 @@
 # Brújula Bursátil
 
+**Tu espacio para seguir instrumentos, leer noticias y registrar una cartera multimoneda en el navegador.**
+
+[![Repositorio](https://img.shields.io/badge/GitHub-GermanBartoli-181717?logo=github)](https://github.com/GermanBartoli/brujula-bursatil)
+[![Verificaciones](https://github.com/GermanBartoli/brujula-bursatil/actions/workflows/deploy.yml/badge.svg)](https://github.com/GermanBartoli/brujula-bursatil/actions/workflows/deploy.yml)
+
+[Abrir sitio](https://brujula-bursatil.pages.dev/) · [Empezar](#primeros-pasos) · [Mapa del repositorio](#mapa-del-repositorio) · [Autoría](#autoría-de-esta-documentación)
+
+![Vista del proyecto: Brújula Bursátil](docs/images/vista-actual.jpg)
+
+*Captura de la página publicada, tomada el 9 de noviembre de 2026. Conservada sin redimensionar ni recomprimir.*
+
+## Primeros pasos
+
+1. Abrí Explorar mercados y agregá instrumentos a tus listas.
+2. En Mi cartera registrá cantidad, costo y moneda de compra; revisá qué posiciones tienen cotización disponible.
+3. Usá Preferencias y respaldo para exportar tus datos. Noticias, fuentes y análisis tienen los límites detallados más abajo.
+
+## Referencia y detalles
+
 Un panel personal para seguir acciones internacionales y CEDEARs, leer sus noticias y registrar una cartera en el navegador.
 
 - Sitio: https://brujula-bursatil.pages.dev
@@ -170,3 +189,20 @@ Fuentes técnicas: [Marketaux](https://www.marketaux.com/documentation), [RSS of
 Cuando Marketaux falla o no devuelve resultados verificables, se consulta Google News RSS con el mismo contexto sectorial o nombres de empresa. Se mantienen las menciones visibles y la selección de dominios. El proveedor alternativo se identifica en pantalla: solo aporta titulares, no el contenido completo, y su edición regional no garantiza el país de las empresas. La IA recibe explícitamente ese límite y conserva enlaces a las fuentes.
 
 La búsqueda de IB01 exige contexto visible del Tesoro estadounidense o la Reserva Federal; no acepta una referencia genérica a una tesorería. Este filtro se aplica tanto al proveedor principal como al alternativo.
+
+## Guardado y límite de instrumentos
+
+La versión 0.5.3 coordina los cambios entre pestañas mediante Web Locks y actualiza la vista al recibir cambios de almacenamiento o recuperar el foco. Cada operación lee la versión más reciente antes de guardar. El límite de 500 instrumentos se valida antes de escribir: si una operación lo supera, se rechaza completa y se muestra el motivo. Los datos guardados que no pueden interpretarse no se reemplazan silenciosamente.
+
+
+## Mapa del repositorio
+
+- [package.json](<package.json>)
+- [LICENSE](<LICENSE>)
+- [index.html](<index.html>)
+
+## Autoría de esta documentación
+
+Repositorio mantenido por [Germán Bartoli](https://github.com/GermanBartoli). Guía revisada y actualizada con **Codex**, coautor de esta actualización documental. Los autores, colaboradores, licencias y recursos de terceros conservan sus créditos originales.
+
+Los commits de esta revisión incluyen `Co-authored-by: Codex <noreply@openai.com>`; esta atribución no modifica la autoría del historial anterior.
