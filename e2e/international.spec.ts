@@ -103,6 +103,7 @@ test("Encuentra y registra NVIDIA alemana en EUR usando códigos de mercado", as
   await page.getByLabel("Cantidad de títulos").fill("2");
   await page.getByLabel(/Precio promedio/).fill("180");
   await page.getByRole("button", { name: "Guardar posición" }).click();
+  await expect(page.getByRole("status")).toContainText("Posición guardada");
   await page.reload();
   const position = await page.evaluate(
     () => JSON.parse(localStorage.getItem("brujula-bursatil:v1")!).positions[0],

@@ -1,4 +1,5 @@
 import { NewsSummary } from "./NewsSummary";
+import { savePortfolio, type DataChange } from "./portfolioStorage";
 import { contextFor, sectorFilters, parseDomains, officialSources } from "./news";
 import { Research, RiskPanel, MacroPanel, Resources } from "./Workspace";
 import { currencies, positionValue } from "./portfolio";
@@ -380,8 +381,9 @@ export default function App() {
       /* Las preferencias siguen disponibles durante esta sesión. */
     }
   }, [preferences]);
-  const [data, setData] = useState<LocalData>(initial.data),
+  const [data, setDataState] = useState<LocalData>(initial.data),
     [storageError, setStorageError] = useState(initial.error);
+  const [saveError, setSaveError] = useState("");
   const previousVisit = useRef(initial.data.lastVisit);
   const [page, setPage] = useState<Page>(pageFromUrl),
     [mobile, setMobile] = useState(false),
@@ -423,19 +425,39 @@ export default function App() {
     [confirmImport, setConfirmImport] = useState<LocalData | null>(null),
     [newList, setNewList] = useState("");
   const uploadRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (storageError) return;
+  async function setData(change: DataChange) {
+    setSaveError("");
     try {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ ...data, lastVisit: new Date().toISOString() }),
-      );
-    } catch {
-      setStorageError(
-        "No se pudo guardar en este navegador. Exportá una copia para conservar tus datos.",
-      );
+      await savePortfolio(localStorage, navigator.locks, change);
+      const saved = load();
+      setDataState(saved.data);
+      setStorageError(saved.error);
+      return !saved.error;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo guardar el cambio.";
+      setSaveError(message);
+      setNotice(message);
+      return false;
     }
-  }, [data, storageError]);
+  }
+  useEffect(() => {
+    const refresh = () => {
+      const saved = load();
+      if (!saved.error) setDataState(saved.data);
+      setStorageError(saved.error);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (event.key === storageKey || event.key === null)) refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", refresh);
+    // Actualizar la visita conserva cualquier cambio realizado desde otra pestaña.
+    void setData((current) => current);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(""), 6500);
@@ -1056,15 +1078,16 @@ export default function App() {
                       <select
                         aria-label={`Lista de ${a.symbol}`}
                         value={data.assignments[a.id] || "Principal"}
-                        onChange={(e) =>
-                          setData((d) => ({
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          void setData((d) => ({
                             ...d,
                             assignments: {
                               ...d.assignments,
-                              [a.id]: e.target.value,
+                              [a.id]: value,
                             },
-                          }))
-                        }
+                          }));
+                        }}
                       >
                         {data.lists.map((l) => (
                           <option key={l}>{l}</option>
@@ -1330,9 +1353,10 @@ export default function App() {
                 <select
                   aria-label="Moneda final de la cartera"
                   value={data.currency}
-                  onChange={(e) =>
-                    setData((d) => ({ ...d, currency: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const currency = e.target.value;
+                    void setData((d) => ({ ...d, currency }));
+                  }}
                 >
                   {currencies.map((c) => (
                     <option key={c} value={c}>
@@ -2240,6 +2264,7 @@ export default function App() {
               <p className="muted">Buscando en mercados mundiales…</p>
             )}
             {searchError && <p className="inline-error">{searchError}</p>}
+            {saveError && <p role="alert" className="inline-error">{saveError}</p>}
             <div className="search-results">
               {shownAssets.map((a) => (
                 <div className="search-result" key={a.id}>
@@ -2300,10 +2325,11 @@ export default function App() {
       {editing && (
         <PositionModal
           asset={editing}
+          saveError={saveError}
           position={data.positions.find((p) => p.asset.id === editing.id)}
           onClose={() => setEditing(null)}
-          onSave={(p) => {
-            setData((d) => ({
+          onSave={async (p) => {
+            const saved = await setData((d) => ({
               ...d,
               positions: [
                 ...d.positions.filter((x) => x.asset.id !== p.asset.id),
@@ -2313,16 +2339,20 @@ export default function App() {
                 a.id === p.asset.id ? p.asset : a,
               ),
             }));
-            setEditing(null);
-            setNotice("Posición guardada en este navegador.");
+            if (saved) {
+              setEditing(null);
+              setNotice("Posición guardada en este navegador.");
+            }
           }}
-          onDelete={() => {
-            setData((d) => ({
+          onDelete={async () => {
+            const saved = await setData((d) => ({
               ...d,
               positions: d.positions.filter((p) => p.asset.id !== editing.id),
             }));
-            setEditing(null);
-            setNotice("Posición eliminada del registro local.");
+            if (saved) {
+              setEditing(null);
+              setNotice("Posición eliminada del registro local.");
+            }
           }}
         />
       )}
@@ -2343,9 +2373,8 @@ export default function App() {
               </button>
               <button
                 className="primary"
-                onClick={() => {
-                  setData(confirmImport);
-                  setStorageError("");
+                onClick={async () => {
+                  if (!await setData(confirmImport)) return;
                   setSelected(confirmImport.watchlist[0] || catalog[0]);
                   setList("Todas");
                   setConfirmImport(null);
@@ -2377,12 +2406,14 @@ export default function App() {
 function PositionModal({
   asset,
   position,
+  saveError,
   onClose,
   onSave,
   onDelete,
 }: {
   asset: Asset;
   position?: Position;
+  saveError: string;
   onClose: () => void;
   onSave: (p: Position) => void;
   onDelete: () => void;
@@ -2569,9 +2600,9 @@ function PositionModal({
           Si ya tenés varias compras, ingresá el total de títulos y su costo
           promedio. Este registro no ejecuta operaciones de bolsa.
         </p>
-        {error && (
+        {(error || saveError) && (
           <p role="alert" className="inline-error">
-            {error}
+            {error || saveError}
           </p>
         )}
         <div className="button-row">

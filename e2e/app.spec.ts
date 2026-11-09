@@ -1,5 +1,42 @@
 import { test, expect } from "@playwright/test";
 import { catalog, cedearSeeds } from "../src/catalog";
+import { emptyData } from "../src/portfolio";
+
+test("Dos pestañas sincronizan sus cambios sin reemplazar listas ajenas", async ({ page, context }) => {
+  await page.goto("/ajustes");
+  const other = await context.newPage();
+  await other.route("**/api/**", route => route.fulfill({ json: { data: [], warnings: [] } }));
+  await other.route("https://s3.tradingview.com/**", route => route.abort());
+  await other.goto("/ajustes");
+  await page.getByLabel("Nombre de la lista").fill("Primera pestaña");
+  await other.getByLabel("Nombre de la lista").fill("Segunda pestaña");
+  await Promise.all([
+    page.getByRole("button", { name: "Crear", exact: true }).click(),
+    other.getByRole("button", { name: "Crear", exact: true }).click(),
+  ]);
+  for (const tab of [page, other]) {
+    await expect(tab.getByLabel("Eliminar lista Primera pestaña")).toBeVisible();
+    await expect(tab.getByLabel("Eliminar lista Segunda pestaña")).toBeVisible();
+  }
+  await page.reload();
+  await expect(page.getByLabel("Eliminar lista Segunda pestaña")).toBeVisible();
+  await other.close();
+});
+
+test("El instrumento 501 se rechaza con un aviso y conserva un guardado legible", async ({ page }) => {
+  const data = emptyData();
+  data.watchlist = Array.from({ length: 500 }, (_, i) => ({ ...catalog[0], id: `PRUEBA${i}`, symbol: `P${i}` }));
+  await page.evaluate(data => localStorage.setItem("brujula-bursatil:v1", JSON.stringify(data)), data);
+  await page.reload();
+  await page.getByRole("button", { name: "Agregar acción", exact: true }).click();
+  await page.getByRole("button", { name: `Seguir ${catalog[0].symbol} ${catalog[0].exchange}`, exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("500");
+  await page.keyboard.press("Escape");
+  await page.reload();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("brujula-bursatil:v1")!));
+  expect(saved.watchlist).toHaveLength(500);
+  await expect(page.getByText("No se pudo leer tu guardado local.", { exact: false })).toHaveCount(0);
+});
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
