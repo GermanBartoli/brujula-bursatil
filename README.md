@@ -5,7 +5,7 @@
 [![Repositorio](https://img.shields.io/badge/GitHub-GermanBartoli-181717?logo=github)](https://github.com/GermanBartoli/brujula-bursatil)
 [![Verificaciones](https://github.com/GermanBartoli/brujula-bursatil/actions/workflows/deploy.yml/badge.svg)](https://github.com/GermanBartoli/brujula-bursatil/actions/workflows/deploy.yml)
 
-[Abrir sitio](https://brujula-bursatil.pages.dev/) · [Empezar](#primeros-pasos) · [Mapa del repositorio](#mapa-del-repositorio) · [Autoría](#autoría-de-esta-documentación)
+[Abrir en Cloudflare](https://brujula-bursatil.pages.dev/) · [Empezar](#primeros-pasos) · [Mapa del repositorio](#mapa-del-repositorio) · [Autoría](#autoría-de-esta-documentación)
 
 ![Vista del proyecto: Brújula Bursátil](docs/images/vista-actual.jpg)
 
