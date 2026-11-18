@@ -7,7 +7,7 @@ minimumReleaseAgeExclude:
   - '@cloudflare/workerd-linux-64@1.20261109.1'
   - '@cloudflare/workerd-linux-arm64@1.20261109.1'
   - '@cloudflare/workerd-windows-64@1.20261109.1'
-  - '@cloudflare/workers-types@5.20261109.1'
+  - '@cloudflare/workers-types@5.20261109.1 || 5.20261118.1'
   - '@rolldown/binding-android-arm-eabi@1.2.18'
   - '@rolldown/binding-android-arm64@1.2.18'
   - '@rolldown/binding-darwin-arm64@1.2.18'
@@ -24,8 +24,9 @@ minimumReleaseAgeExclude:
   - '@rolldown/binding-win32-arm64-msvc@1.2.18'
   - '@rolldown/binding-win32-x64-msvc@1.2.18'
   - '@vitejs/plugin-react@6.3.0'
-  - miniflare@5.20261109.0-beta
+  - miniflare@5.20261109.0-beta || 5.20261117.0-beta
   - rolldown@1.2.18
   - vite@8.3.7
   - workerd@1.20261109.1
-  - wrangler@4.159.0
+  - wrangler@4.159.0 || 4.164.0
+  - lucide-react@1.74.0
