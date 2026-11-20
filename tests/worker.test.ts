@@ -283,3 +283,45 @@ test("La búsqueda remota argentina coincide con el instrumento local", () => {
   assert.equal(asset?.id, "BCBA:TGNO4");
   assert.equal(asset?.currency, "ARS");
 });
+
+test("Mercado y catálogo conservan las fuentes válidas si fallan los CEDEARs o la caché", async (t) => {
+  const origen = "https://brujula-prueba.example";
+  const peticionesCache: string[] = [];
+  const original = Object.getOwnPropertyDescriptor(globalThis, "caches");
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, "caches", original);
+    else Reflect.deleteProperty(globalThis, "caches");
+  });
+  Object.defineProperty(globalThis, "caches", {
+    configurable: true,
+    value: { default: {
+      match: async (r: Request) => {
+        peticionesCache.push(r.url);
+        return new Response("contenido incompleto");
+      },
+      put: async () => { throw new Error("Caché no disponible"); },
+    } },
+  });
+  t.mock.method(globalThis, "fetch", async (entrada: URL | string) => {
+    const ruta = new URL(entrada).pathname;
+    if (ruta.endsWith("/usa_stocks")) return Response.json([null, { symbol: "AAPL", c: 42 }]);
+    if (ruta.endsWith("/arg_cedears")) return Response.json({ error: "datos no disponibles" });
+    if (ruta.endsWith("/arg_stocks")) return Response.json([]);
+    if (ruta.endsWith("/contadoconliqui")) return Response.json({ venta: 1234 });
+    if (ruta.endsWith("/rates")) return Response.json([null, { base:"USD", quote:"EUR", rate:0.9, date:"2026-11-20" }]);
+    throw Error("Fuente inesperada");
+  });
+  const mercado = await worker.fetch(new Request(origen + "/api/market"), env);
+  assert.equal(mercado.status, 200);
+  const datos = await mercado.json() as { usa: Array<{symbol:string}>, cedears: unknown[], warnings: string[], ccl:number, fx:Record<string,number> };
+  assert.deepEqual(datos.usa.map(q => q.symbol), ["AAPL"]);
+  assert.equal(datos.ccl, 1234);
+  assert.equal(datos.fx.EUR, 0.9);
+  assert.deepEqual(datos.cedears, []);
+  assert.deepEqual(datos.warnings, ["Cotizaciones de CEDEARs no disponibles."]);
+  const catalogo = await worker.fetch(new Request(origen + "/api/catalog"), env);
+  assert.equal(catalogo.status, 200);
+  const listado = await catalogo.json() as { data: Array<{kind:string}> };
+  assert.ok(listado.data.some(a => a.kind === "cedear"));
+  assert.ok(peticionesCache.length >= 2 && peticionesCache.every(u => new URL(u).origin === origen));
+});

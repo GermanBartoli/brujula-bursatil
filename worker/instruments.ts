@@ -78,7 +78,7 @@ export function normalizeFx(raw: unknown) {
   if (!Array.isArray(raw)) return { rates, date: "" };
   for (const row of raw) {
     if (
-      row.base === "USD" &&
+      row && row.base === "USD" &&
       /^[A-Z]{3}$/.test(row.quote) &&
       row.quote !== "ARS" &&
       Number.isFinite(row.rate) &&

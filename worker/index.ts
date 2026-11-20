@@ -69,34 +69,39 @@ async function cached<T>(
   key: string,
   ttl: number,
   producer: () => Promise<T>,
+  origenCacheOpcional?: string,
 ): Promise<T> {
   const c = cache(),
     request = new Request(
-      `https://brujula.internal/cache/v1/${encodeURIComponent(key)}`,
+      `${origenCacheOpcional ?? "https://brujula.internal"}/cache/v1/${encodeURIComponent(key)}`,
     );
-  const hit = await c?.match(request);
-  if (hit) return hit.json() as Promise<T>;
-  const active = pending.get(key);
+  try {
+    const hit = await c?.match(request);
+    if (hit) return (await hit.json()) as T;
+  } catch (error) {
+    if (!origenCacheOpcional) throw error;
+  }
+  const active = pending.get(request.url);
   if (active) return active as Promise<T>;
   const task = (async () => {
     const data = await producer();
-    if (c)
-      await c.put(
-        request,
-        new Response(JSON.stringify(data), {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": `public,max-age=${ttl}`,
-          },
-        }),
-      );
+    if (c) {
+      const respuesta = Response.json(data, {
+        headers: { "Cache-Control": `public,max-age=${ttl}` },
+      });
+      try {
+        await c.put(request, respuesta);
+      } catch (error) {
+        if (!origenCacheOpcional) throw error;
+      }
+    }
     return data;
   })();
-  pending.set(key, task);
+  pending.set(request.url, task);
   try {
     return await task;
   } finally {
-    pending.delete(key);
+    pending.delete(request.url);
   }
 }
 async function fetchJson(url: URL | string) {
@@ -157,7 +162,7 @@ export function normalizeQuotes(raw: unknown): Quote[] {
     throw new ApiError(502, "La fuente devolvió cotizaciones inválidas.");
   return raw
     .filter(
-      (x) => typeof x.symbol === "string" && Number.isFinite(x.c) && x.c > 0,
+      (x) => x && typeof x.symbol === "string" && Number.isFinite(x.c) && x.c > 0,
     )
     .map((x) => ({
       symbol: x.symbol,
@@ -173,7 +178,7 @@ export function cedearCatalog(quotes: Quote[], links: unknown): Asset[] {
   if (Array.isArray(links))
     for (const row of links) {
       if (
-        row.arg_panel === "cedear" &&
+        row && row.arg_panel === "cedear" &&
         typeof row.ticker_ar === "string" &&
         typeof row.ticker_usa === "string" &&
         symbolPattern.test(row.ticker_ar) &&
@@ -204,13 +209,13 @@ export function cedearCatalog(quotes: Quote[], links: unknown): Asset[] {
       };
     });
 }
-async function market() {
+async function market(origen: string) {
   return cached("market:v3", 300, async () => {
     const results = await Promise.allSettled([
-      fetchJson("https://data912.com/live/usa_stocks"),
-      fetchJson("https://data912.com/live/arg_cedears"),
+      fetchJson("https://data912.com/live/usa_stocks").then(normalizeQuotes),
+      fetchJson("https://data912.com/live/arg_cedears").then(normalizeQuotes),
       fetchJson("https://dolarapi.com/v1/dolares/contadoconliqui"),
-      fetchJson("https://data912.com/live/arg_stocks"),
+      fetchJson("https://data912.com/live/arg_stocks").then(normalizeQuotes),
       fetchJson(
         "https://api.frankfurter.dev/v2/rates?base=USD&quotes=EUR,GBP,CNY,HKD,JPY,CHF,CAD,AUD,BRL,INR",
       ),
@@ -238,18 +243,18 @@ async function market() {
     return {
       fx: internationalFx.rates,
       fxDate: internationalFx.date,
-      usa: usa ? normalizeQuotes(usa) : [],
+      usa: usa ?? [],
       argentina: argentina
-        ? normalizeQuotes(argentina).filter((q) =>
+        ? (argentina as Quote[]).filter((q) =>
             argentinaSeeds.some((a) => a.symbol === q.symbol),
           )
         : [],
-      cedears: cedears ? normalizeQuotes(cedears) : [],
+      cedears: cedears ?? [],
       ccl: Number.isFinite(fx?.venta) && fx.venta > 0 ? fx.venta : null,
       fetchedAt: new Date().toISOString(),
       warnings,
     };
-  });
+  }, origen);
 }
 export function entityAsset(e: any): Asset | null {
   if (
@@ -532,14 +537,16 @@ async function route(request: Request, env: Env): Promise<Response> {
     return json({ analysis });
   }
   if (path === "/api/market" && request.method === "GET")
-    return json(await market());
+    return json(await market(url.origin));
   if (path === "/api/catalog" && request.method === "GET") {
-    const data = await market();
+    const data = await market(url.origin);
     let links: unknown = [];
     try {
-      links = await cached("cedear-links", 86400, () =>
-        fetchJson("https://data912.com/live/ccl"),
-      );
+      if (data.cedears.length) {
+        links = await cached(
+          "cedear-links", 86400, () => fetchJson("https://data912.com/live/ccl"), url.origin,
+        );
+      }
     } catch {
       /* Se conserva el catálogo inicial si no hay correspondencias verificables. */
     }
