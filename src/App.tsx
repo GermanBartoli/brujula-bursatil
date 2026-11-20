@@ -1105,6 +1105,8 @@ export default function App() {
   );
   return (
     <div className="app">
+      <a className="salto-contenido" href="#contenido">Saltar al contenido</a>
+
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
         <a
           className="brand"
@@ -1248,6 +1250,7 @@ export default function App() {
             </select>
             <button
               className="search-trigger"
+                aria-label="Buscar una acción"
               onClick={() => setSearchOpen(true)}
             >
               <Search size={16} />
@@ -1265,7 +1268,7 @@ export default function App() {
             <span className="avatar">GB</span>
           </div>
         </header>
-        <main>
+        <main id="contenido" tabIndex={-1}>
           {storageError && (
             <div className="alert" role="alert">
               {storageError}
