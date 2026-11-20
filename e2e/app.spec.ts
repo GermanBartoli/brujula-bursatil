@@ -186,6 +186,8 @@ test("Permite analizar otro ticker sin registrar una posición", async ({ page }
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/analisis$/);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("brujula-bursatil:v1")!).positions)).toHaveLength(0);
+  await page.locator('.widget-financials').scrollIntoViewIfNeeded();
   await expect.poll(() => page.locator('.widget-financials script').textContent()).toContain('NASDAQ:AAPL');
+  await page.locator('.widget-technical').scrollIntoViewIfNeeded();
   await expect.poll(() => page.locator('.widget-technical script').textContent()).toContain('NASDAQ:AAPL');
 });

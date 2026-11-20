@@ -98,9 +98,14 @@ export default function TradingWidget({
               locale: "es",
             };
     script.textContent = JSON.stringify(options);
-    const timer = window.setTimeout(() => container.appendChild(script), 0);
+    const observador = new IntersectionObserver(entradas => {
+      if (!entradas.some(entrada => entrada.isIntersecting)) return;
+      observador.disconnect();
+      container.appendChild(script);
+    });
+    observador.observe(container);
     return () => {
-      window.clearTimeout(timer);
+      observador.disconnect();
       container.replaceChildren();
     };
   }, [symbol, kind, theme]);
