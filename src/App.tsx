@@ -720,10 +720,25 @@ export default function App() {
     const label = navigation.find((item) => item.id === page)?.label || "Preferencias y respaldo";
     document.title = label + " · Brújula Bursátil";
   }, [page]);
+  useEffect(() => {
+    if (!mobile) return;
+    const boton = document.querySelector<HTMLButtonElement>(".mobile-menu");
+    const menu = document.getElementById("menu-principal");
+    const destino = menu?.querySelector<HTMLButtonElement>("nav button.active") ?? menu?.querySelector<HTMLButtonElement>("nav button");
+    destino?.focus();
+    const cerrar = (evento: KeyboardEvent) => {
+      if (evento.key !== "Escape") return;
+      setMobile(false);
+      boton?.focus();
+    };
+    document.addEventListener("keydown", cerrar);
+    return () => document.removeEventListener("keydown", cerrar);
+  }, [mobile]);
   function go(p: Page) {
     if (window.location.pathname !== pagePaths[p])
       window.history.pushState(null, "", pagePaths[p]);
     setPage(p);
+    if (mobile) document.getElementById("contenido")?.focus({ preventScroll: true });
     setMobile(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1107,7 +1122,7 @@ export default function App() {
     <div className="app">
       <a className="salto-contenido" href="#contenido">Saltar al contenido</a>
 
-      <aside className={`sidebar ${mobile ? "open" : ""}`}>
+      <aside id="menu-principal" className={`sidebar ${mobile ? "open" : ""}`}>
         <a
           className="brand"
           href="#"
@@ -1212,7 +1227,10 @@ export default function App() {
         <button
           className="sidebar-overlay"
           aria-label="Cerrar menú"
-          onClick={() => setMobile(false)}
+          onClick={() => {
+            setMobile(false);
+            document.querySelector<HTMLButtonElement>(".mobile-menu")?.focus();
+          }}
         />
       )}
       <div className="main-wrap">
@@ -1220,7 +1238,9 @@ export default function App() {
           <div className="breadcrumb">
             <button
               className="icon-btn mobile-menu"
-              aria-label="Abrir menú"
+              aria-expanded={mobile}
+              aria-controls="menu-principal"
+              aria-label={mobile ? "Cerrar navegación" : "Abrir menú"}
               onClick={() => setMobile(!mobile)}
             >
               <Menu />
