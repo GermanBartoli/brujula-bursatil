@@ -2200,3 +2200,11 @@ dialog::backdrop {
   border: 2px solid currentColor;
 }
 .salto-contenido:focus { transform: none; }
+
+@media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; height: auto; min-height: 75px; padding-block: 8px; }
+  .top-actions { margin-inline-start: auto; }
+}
+@media (max-width: 700px) {
+  .topbar { min-height: 64px; }
+}
