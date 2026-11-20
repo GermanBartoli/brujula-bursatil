@@ -16,7 +16,7 @@ import {
   type NewsFilter,
 } from "./preferences";
 import { argentinaSeeds } from "./argentina";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   ArrowDownToLine,
@@ -204,6 +204,7 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const tituloId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const startedOutside = useRef(false);
   function outside(x: number, y: number) {
@@ -213,13 +214,20 @@ function Modal({
     );
   }
   useEffect(() => {
-    ref.current?.showModal();
     const dialog = ref.current;
-    return () => dialog?.close();
+    const origen = document.activeElement;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      if (origen instanceof HTMLElement && origen.isConnected && document.activeElement === document.body) {
+        origen.focus({ preventScroll: true });
+      }
+    };
   }, []);
   return (
     <dialog
       ref={ref}
+      aria-labelledby={tituloId}
       onCancel={onClose}
       onPointerDown={(e) => {
         startedOutside.current = outside(e.clientX, e.clientY);
@@ -238,7 +246,7 @@ function Modal({
       }}
     >
       <div className="modal-head">
-        <h2>{title}</h2>
+        <h2 id={tituloId}>{title}</h2>
         <button className="icon-btn" aria-label="Cerrar" onClick={onClose}>
           <X size={20} />
         </button>
