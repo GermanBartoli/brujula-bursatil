@@ -153,13 +153,21 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
     if (pending) return pending as Promise<T>;
   }
   const task = (async () => {
-    const r = await fetch("/api/" + path, options);
-    const data = (await r.json()) as T & {
+    let r: Response;
+    try {
+      r = await fetch("/api/" + path, options);
+    } catch (error) {
+      if (options?.signal?.aborted) throw error;
+      throw Error("No se pudo conectar con el servicio. Revisá la conexión y volvé a intentarlo.");
+    }
+    const data = (await r.json().catch(() => {
+      throw Error("El servicio no pudo completar la consulta. Volvé a intentarlo.");
+    })) as T & {
       error?: string;
       warnings?: string[];
     };
     if (!r.ok)
-      throw Error(data.error || "No pudimos conectar con el servicio.");
+      throw Error(data?.error || "No pudimos conectar con el servicio.");
     if (cacheable && !data.warnings?.length) {
       try {
         sessionStorage.setItem(
@@ -432,6 +440,8 @@ export default function App() {
   const [editing, setEditing] = useState<Asset | null>(null),
     [confirmImport, setConfirmImport] = useState<LocalData | null>(null),
     [newList, setNewList] = useState("");
+  const [consultandoMercado, setConsultandoMercado] = useState(false);
+  const reintentoMercado = useRef<HTMLButtonElement | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   async function setData(change: DataChange) {
     setSaveError("");
@@ -480,8 +490,17 @@ export default function App() {
       if (canceled) return;
       if (m.status === "fulfilled") {
         setMarket((previous) => ({ ...m.value, global: previous?.global }));
+        const origen = reintentoMercado.current;
+        const devolverFoco = origen && document.activeElement === origen;
         setMarketError("");
+        if (devolverFoco) requestAnimationFrame(() => {
+          if (document.activeElement === document.body || document.activeElement === origen) {
+            document.getElementById("contenido")?.focus({ preventScroll: true });
+          }
+        });
       } else setMarketError(m.reason.message);
+      reintentoMercado.current = null;
+      setConsultandoMercado(false);
       if (a.status === "fulfilled") setAssets(a.value.data);
     });
     return () => {
@@ -1304,10 +1323,15 @@ export default function App() {
             </div>
           )}
           {marketError && (
-            <div className="alert">
+            <div className="alert" role="alert">
               {marketError}
-              <button onClick={() => setReload((n) => n + 1)}>
-                Reintentar
+              <button aria-disabled={consultandoMercado} onClick={evento => {
+                if (reintentoMercado.current) return;
+                setConsultandoMercado(true);
+                reintentoMercado.current = evento.currentTarget;
+                setReload((n) => n + 1);
+              }}>
+                {consultandoMercado ? "Consultando…" : "Reintentar"}
               </button>
             </div>
           )}
