@@ -36,6 +36,28 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
+async function leerTextoLimitado(request: Request, maximo: number): Promise<string | null> {
+  if (Number(request.headers.get("Content-Length")) > maximo) return null;
+  const lector = request.body?.getReader();
+  if (!lector) return "";
+  const decodificador = new TextDecoder();
+  let bytes = 0;
+  let texto = "";
+  try {
+    while (true) {
+      const { done, value } = await lector.read();
+      if (done) return texto + decodificador.decode();
+      bytes += value.byteLength;
+      if (bytes > maximo) {
+        await lector.cancel();
+        return null;
+      }
+      texto += decodificador.decode(value, { stream: true });
+    }
+  } finally {
+    lector.releaseLock();
+  }
+}
 const symbolPattern = /^[A-Z0-9.^=_\-]{1,24}$/i;
 // En Pages, el límite es por instancia. No sustituye una cuota global distribuida.
 const localLimits = new Map<string, { until: number; count: number }>();
@@ -491,8 +513,8 @@ async function route(request: Request, env: Env): Promise<Response> {
       request.headers.get("Origin") !== url.origin
     )
       throw new ApiError(403, "Origen no permitido.");
-    const body = await request.text();
-    if (body.length > 30000)
+    const body = await leerTextoLimitado(request, 30000);
+    if (body === null)
       throw new ApiError(413, "Solicitud demasiado grande.");
     let input: any;
     try {
@@ -795,8 +817,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (path === "/api/news-summary" && request.method === "POST") {
     if (request.headers.get("Origin") && request.headers.get("Origin") !== url.origin) throw new ApiError(403, "Origen no permitido.");
-    const body = await request.text();
-    if (body.length > 5000) throw new ApiError(413, "Solicitud demasiado grande.");
+    const body = await leerTextoLimitado(request, 5000);
+    if (body === null) throw new ApiError(413, "Solicitud demasiado grande.");
     let input: any;
     try { input = JSON.parse(body); } catch { throw new ApiError(400, "Solicitud inválida."); }
     if (!input || !Array.isArray(input.ids) || !input.ids.length || input.ids.length > 12 || !input.ids.every((s: unknown) => typeof s === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(s)) || typeof input.sector !== "string" || input.sector.length > 100) throw new ApiError(400, "Noticias inválidas.");
@@ -813,8 +835,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get("Origin");
     if (origin && origin !== url.origin)
       throw new ApiError(403, "Origen no permitido.");
-    const body = await request.text();
-    if (body.length > 1000)
+    const body = await leerTextoLimitado(request, 1000);
+    if (body === null)
       throw new ApiError(413, "Solicitud demasiado grande.");
     let input: any;
     try {
