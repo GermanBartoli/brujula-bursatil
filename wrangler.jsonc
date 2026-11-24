@@ -3,5 +3,6 @@
   "name": "brujula-bursatil",
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-10-01",
+  "d1_databases": [{ "binding": "CUOTA_IA", "database_name": "brujula-cuota-ia", "database_id": "d437fb2c-4492-4dcf-ac6e-471882be4bf5" }],
   "ai": { "binding": "AI" },
 }

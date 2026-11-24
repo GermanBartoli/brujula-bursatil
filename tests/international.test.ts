@@ -343,6 +343,7 @@ test("Noticias de Asia envían países concretos y la IA recibe solo pesos", asy
   const env = {
     ASSETS: { fetch: async () => new Response() },
     MARKETAUX_API_KEY: "prueba",
+    CUOTA_IA: { prepare: () => ({ first: async () => ({ id: 1 }) }) } as unknown as D1Database,
     AI: {
       run: async (_model: string, input: unknown) => {
         aiInput = JSON.stringify(input);

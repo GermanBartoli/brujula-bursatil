@@ -113,7 +113,7 @@ La cartera, los costos y cantidades se guardan en `localStorage`. El análisis d
 
 La API utiliza caché compartida por centro de datos: cinco minutos para cotizaciones, treinta minutos para noticias y un día para búsquedas y análisis. Se prioriza la clave de respaldo, luego la tercera y finalmente la original ante cuota agotada o límite de consultas; no se rotan credenciales inválidas. La caché de noticias es por empresa y página, reutilizable entre listas y selección individual. El navegador también conserva los resultados durante treinta minutos en la sesión; las consultas simultáneas idénticas se agrupan. Los fallos parciales se indican y no se guardan en esa caché. Las claves y errores privados del proveedor no se devuelven al navegador.
 
-El análisis de noticias acepta únicamente identificadores de noticias previamente consultadas y almacenadas; no permite enviar prompts arbitrarios ni descargar URLs indicadas por el cliente. Tiene límites por IP e instancia. En Pages estos contadores son aproximados y no constituyen una cuota global distribuida. Antes de abrir el servicio a un público amplio, agregar control de acceso, límites globales durables y monitoreo del consumo.
+El análisis de noticias acepta únicamente identificadores de noticias previamente consultadas y almacenadas; no permite enviar prompts arbitrarios ni descargar URLs indicadas por el cliente. Conserva los límites por IP e instancia y comparte un contador D1 entre las funciones que usan el modelo.
 
 ## Próximas ampliaciones
 
@@ -218,3 +218,5 @@ Los commits de esta revisión incluyen `Co-authored-by: Codex <noreply@openai.co
 ## Guías y comunidad
 
 [Guía de uso](GUIA_DE_USO.md) · [Preguntas frecuentes](PREGUNTAS_FRECUENTES.md) · [Cómo colaborar](CONTRIBUTING.md) · [Código de conducta](CODE_OF_CONDUCT.md)
+
+El cupo compartido de Workers AI permite hasta 10 llamadas por minuto y 100 por día UTC entre perfiles, noticias y análisis. D1 reserva el lugar justo antes de invocar el modelo. Los resultados servidos desde caché no consumen lugares.

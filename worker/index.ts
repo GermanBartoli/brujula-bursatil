@@ -26,6 +26,7 @@ export interface Env {
   MARKETAUX_API_KEY_BACKUP?: string;
   MARKETAUX_API_KEY_THIRD?: string;
   AI?: { run(model: string, input: unknown): Promise<unknown> };
+  CUOTA_IA?: D1Database;
   API_LIMITER?: Limiter;
   AI_LIMITER?: Limiter;
 }
@@ -35,6 +36,26 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+export function iaConCupo(env: Env) {
+  return {
+    async run(modelo: string, entrada: unknown) {
+      if (!env.AI || !env.CUOTA_IA)
+        throw new ApiError(503, "El análisis con IA no está disponible.");
+      const reserva = await env.CUOTA_IA.prepare(`
+        INSERT INTO cuota_ia VALUES (1, unixepoch()/60, 1, unixepoch()/86400, 1)
+        ON CONFLICT(id) DO UPDATE SET
+          llamadas_minuto = CASE WHEN minuto = excluded.minuto THEN llamadas_minuto+1 ELSE 1 END,
+          llamadas_dia = CASE WHEN dia = excluded.dia THEN llamadas_dia+1 ELSE 1 END,
+          minuto = excluded.minuto, dia = excluded.dia
+        WHERE (minuto <> excluded.minuto OR llamadas_minuto < 10)
+          AND (dia <> excluded.dia OR llamadas_dia < 100)
+        RETURNING id
+      `).first();
+      if (!reserva) throw new ApiError(429, "Se alcanzó el cupo compartido de IA por minuto o por día.");
+      return env.AI.run(modelo, entrada);
+    },
+  };
 }
 async function leerTextoLimitado(request: Request, maximo: number): Promise<string | null> {
   if (Number(request.headers.get("Content-Length")) > maximo) return null;
@@ -539,7 +560,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       weight: p.weight,
       estimated: p.estimated === true,
     }));
-    const raw: any = await env.AI.run("@cf/google/gemma-4-26b-a4b-it", {
+    const raw: any = await iaConCupo(env).run("@cf/google/gemma-4-26b-a4b-it", {
       max_completion_tokens: 1800,
       temperature: 0.2,
       chat_template_kwargs: { enable_thinking: false },
@@ -825,7 +846,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!env.AI) throw new ApiError(503, "El análisis con IA no está disponible.");
     if (!localLimit("summary:" + ip, 3) || !localLimit("summary:global", 10)) throw new ApiError(429, "Esperá un minuto para otro resumen.");
     if (env.AI_LIMITER && !(await env.AI_LIMITER.limit({ key: ip })).success) throw new ApiError(429, "Límite de análisis alcanzado.");
-    return json(await summarizeNews(input, env.AI, async id => {
+    return json(await summarizeNews(input, iaConCupo(env), async id => {
       const response = await cache()?.match(new Request(`https://brujula.internal/cache/v1/${encodeURIComponent("article:" + id)}`));
       if (!response) throw new ApiError(404, "Las noticias expiraron. Actualizá antes de resumir.");
       return response.json() as Promise<Article>;
@@ -885,7 +906,7 @@ async function route(request: Request, env: Env): Promise<Response> {
             "Esta noticia expiró. Actualizá las noticias antes de analizarla.",
           );
         const a: Article = await article.json();
-        const result = await env.AI!.run("@cf/google/gemma-4-26b-a4b-it", {
+        const result = await iaConCupo(env).run("@cf/google/gemma-4-26b-a4b-it", {
           max_completion_tokens: 1600,
           temperature: 0.2,
           chat_template_kwargs: { enable_thinking: false },

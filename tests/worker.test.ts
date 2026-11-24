@@ -1,6 +1,9 @@
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import worker, {
+  iaConCupo,
   cedearCatalog,
   entityAsset,
   marketaux,
@@ -324,4 +327,21 @@ test("Mercado y catálogo conservan las fuentes válidas si fallan los CEDEARs o
   const listado = await catalogo.json() as { data: Array<{kind:string}> };
   assert.ok(listado.data.some(a => a.kind === "cedear"));
   assert.ok(peticionesCache.length >= 2 && peticionesCache.every(u => new URL(u).origin === origen));
+});
+
+test("el cupo global cuenta llamadas reales por minuto y día UTC", async () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(readFileSync(new URL("../migrations/0001_cuota_ia.sql", import.meta.url), "utf8"));
+  const binding = { prepare: (sql: string) => ({ first: async () => db.prepare(sql).get() }) };
+  let llamadas = 0;
+  const ia = iaConCupo({ ...env, CUOTA_IA: binding as unknown as D1Database,
+    AI: { run: async () => ++llamadas } });
+  const resultados = await Promise.allSettled(Array.from({ length: 12 }, () => ia.run("prueba", {})));
+  assert.equal(resultados.filter(r => r.status === "fulfilled").length, 10);
+  db.exec("UPDATE cuota_ia SET minuto=minuto-1, llamadas_dia=99");
+  await ia.run("prueba", {});
+  await assert.rejects(ia.run("prueba", {}), { status: 429 });
+  db.exec("UPDATE cuota_ia SET minuto=minuto-1, dia=dia-1");
+  await ia.run("prueba", {});
+  assert.equal(llamadas, 12);
 });
