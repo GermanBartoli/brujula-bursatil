@@ -29,6 +29,6 @@ minimumReleaseAgeExclude:
   - vite@8.3.7
   - workerd@1.20261109.1
   - wrangler@4.159.0 || 4.164.0 || 4.168.0
-  - lucide-react@1.74.0 || 1.77.0 || 1.79.0
-  - '@types/node@26.6.7'
-  - '@types/react@19.3.1'
+  - lucide-react@1.74.0 || 1.77.0 || 1.79.0 || 1.80.0
+  - '@types/node@26.6.7 || 26.6.11'
+  - '@types/react@19.3.1 || 19.3.3'
